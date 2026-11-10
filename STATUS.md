@@ -2,18 +2,17 @@
 
 > Handoff file. Read first, rewrite last. Keep under 25 lines.
 
-- **Current block:** 2 — HTTP buffered path (implemented, verified, committed)
-- **Last green verify:** `npm run verify` → exit 0, 19 tests, ~0.9s
-- **Next action:** start Block 3 in `PROJECT.md` — real adapters (NVIDIA NIM, OpenRouter, Token Harbor) + the credential pool.
+- **Current block:** 3 — Adapters + credential pool (implemented, verified, committed)
+- **Last green verify:** `npm run verify` → exit 0, 124 tests, ~1.1s
+- **Next action:** start Block 4 in `PROJECT.md` — Free-model discovery (`src/providers/registry.ts`, `npm run registry:list`).
 
 ## Done
 
-- Block 1 types pulled forward: `core/types.ts`, `core/errors.ts`, `core/ids.ts`
-- `providers/types.ts` + deterministic `providers/mock.ts`
-- `config/env.ts` — injected env, validates every problem at once
-- Fastify 5 server: request-id hook, bearer auth, 501 boundary, OpenAI error envelope
-- `/healthz` takes injected probes; unwired probes report `unknown`, never `ok`
-- `test/unit/http.test.ts` — 14 `app.inject()` cases; 19 tests total
+- Block 1: Canonical types (`core/types.ts`), errors, IDs, mock adapter with injected RPM & failures
+- Block 2: Fastify 5 server, `/v1/chat/completions` buffered path, `/healthz` probe aggregation
+- Block 3: Adapters (`nvidia`, `openrouter`, `tokenharbor`) + `src/credentials/pool.ts` (SHA-256 stable IDs)
+- End-to-end multi-provider live test runner: `npm run smoke` (scripts/smoke.ts)
+- Total tests: 124 passing unit tests; CodeGraph adopted for structural analysis
 
 ## Known red
 
