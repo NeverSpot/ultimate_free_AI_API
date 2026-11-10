@@ -49,7 +49,8 @@ The request lifecycle is ordered. Do not reorder it.
 ## Invariants — violating these is a bug even if tests pass
 
 1. Rate limits are discovered at runtime. Never hardcode an RPM / RPD / TPM number.
-2. Adding a provider = one new adapter file and zero edits elsewhere.
+2. Adding a provider = one new adapter file plus **one line** in `src/providers/defaults.ts`.
+   Nothing else changes: the registry and every CLI read that single composition root.
 3. Every terminal path (success, parked 429, open breaker, timeout, client abort) writes
    exactly one accounting row. Write it in `finally`.
 4. Breaker transitions are `CLOSED`/`OPEN`/`HALF_OPEN` only, stored in Redis, never in a

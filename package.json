@@ -9,6 +9,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node --env-file-if-exists=.env dist/index.js",
     "smoke": "node --env-file-if-exists=.env --import tsx scripts/smoke.ts",
+    "registry:list": "node --env-file-if-exists=.env --import tsx scripts/registry-list.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test",
     "test:watch": "node --import tsx --test --watch",

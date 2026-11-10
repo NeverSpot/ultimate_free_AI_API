@@ -1,10 +1,8 @@
 import { ProviderError } from '../src/core/errors';
 import type { CanonicalRequest } from '../src/core/types';
+import { defaultAdapterMap } from '../src/providers/defaults';
 import { loadCredentialPool } from '../src/credentials/pool';
 import type { CredentialPool } from '../src/credentials/pool';
-import { NvidiaNimAdapter } from '../src/providers/nvidia-nim';
-import { OpenRouterAdapter } from '../src/providers/openrouter';
-import { TokenHarborAdapter } from '../src/providers/tokenharbor';
 import type { ModelInfo, ProviderAdapter, ProviderId } from '../src/providers/types';
 
 /**
@@ -462,11 +460,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const adapters = new Map<ProviderId, ProviderAdapter>([
-    ['nvidia', new NvidiaNimAdapter()],
-    ['openrouter', new OpenRouterAdapter()],
-    ['tokenharbor', new TokenHarborAdapter()],
-  ]);
+  const adapters = defaultAdapterMap();
 
   const exitCode = await runSmoke({
     pool,

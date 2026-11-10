@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { loadCredentialPool } from '../../src/credentials/pool';
+import { defaultAdapters } from '../../src/providers/defaults';
 import { NvidiaNimAdapter } from '../../src/providers/nvidia-nim';
 import { OpenRouterAdapter } from '../../src/providers/openrouter';
 import { TokenHarborAdapter } from '../../src/providers/tokenharbor';
@@ -35,4 +36,18 @@ test('provider identity: every adapter id is a key the credential pool understan
 test('provider identity: adapter ids are unique', () => {
   const ids = adapters.map((adapter) => adapter.id);
   assert.equal(new Set(ids).size, ids.length);
+});
+
+test('provider identity: defaultAdapters() is the single composition root', () => {
+  // Every CLI builds its adapter set from defaultAdapters(), so adding a provider must be
+  // one file plus one line here — never an edit in scripts/smoke.ts or scripts/registry-list.ts.
+  const adapters = defaultAdapters();
+  const ids = adapters.map((adapter) => adapter.id);
+
+  assert.equal(new Set(ids).size, ids.length, 'defaultAdapters() must not register a duplicate id');
+
+  for (const id of ids) {
+    const envVar = ENV_VAR[id];
+    assert.ok(envVar, `defaultAdapters() exposes "${id}" with no known env variable`);
+  }
 });
