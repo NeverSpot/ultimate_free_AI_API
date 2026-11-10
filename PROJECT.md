@@ -348,11 +348,15 @@ decision is what makes pooling possible later.
 
 ## 7. Progress
 
+> Block 1 was pulled forward into Block 2: the canonical types, `ProviderAdapter` contract
+> and a deterministic mock landed with it. Still outstanding from Block 1: the mock's own
+> RPM ceiling and injectable 429/500/timeout, plus its dedicated test file.
+
 | # | Block | Learn | Built | Tested |
 |---|---|---|---|---|
 | 0 | Repo & toolchain | — | ✅ | ✅ |
-| 1 | Canonical schema + mock adapter | ☐ | ☐ | ☐ |
-| 2 | HTTP buffered path | ☐ | ☐ | ☐ |
+| 1 | Canonical schema + mock adapter | ✅ | ◐ | ☐ |
+| 2 | HTTP buffered path | ✅ | ✅ | ✅ |
 | 3 | Real adapters + credential pool | ☐ | ☐ | ☐ |
 | 4 | Free-model discovery | ☐ | ☐ | ☐ |
 | 5 | Model registry table | ☐ | ☐ | ☐ |
