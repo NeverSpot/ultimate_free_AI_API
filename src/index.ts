@@ -1,1 +1,36 @@
-console.log('Happy developing ✨');
+import { loadConfig } from './config/env';
+import { buildServer } from './http/server';
+import { MockProviderAdapter } from './providers/mock';
+import type { Credential } from './providers/types';
+
+async function main(): Promise<void> {
+  const config = loadConfig(process.env);
+
+  // Phase A wiring: one deterministic mock credential until Block 3 lands the pool.
+  const provider = new MockProviderAdapter({ id: 'mock', model: 'mock-model' });
+  const credential: Credential = {
+    id: 'mock-credential',
+    provider: provider.id,
+    secret: 'mock-secret',
+  };
+
+  const app = buildServer({ config, provider, credential, logger: true });
+
+  const shutdown = async (signal: string): Promise<void> => {
+    app.log.info({ signal }, 'shutting down');
+    await app.close();
+    process.exit(0);
+  };
+
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
+
+  try {
+    await app.listen({ port: config.port, host: '0.0.0.0' });
+  } catch (error) {
+    app.log.error(error);
+    process.exitCode = 1;
+  }
+}
+
+void main();

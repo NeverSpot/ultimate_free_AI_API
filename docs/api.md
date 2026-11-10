@@ -130,7 +130,7 @@ Fastify's built-in validation errors and 404s are remapped into this shape by
 ```json
 {
   "status": "ok",
-  "checks": { "redis": "ok", "postgres": "ok" },
+  "checks": { "redis": "unknown", "postgres": "unknown" },
   "version": "0.1.0",
   "uptime_s": 1234
 }
@@ -138,9 +138,16 @@ Fastify's built-in validation errors and 404s are remapped into this shape by
 
 | Condition | `status` | HTTP |
 |---|---|---|
-| all deps reachable | `ok` | 200 |
-| Postgres down, Redis up | `degraded` | 200 |
-| Redis down | `down` | 503 |
+| all probes ok | `ok` | 200 |
+| a probe not wired yet | `ok` | 200 |
+| Postgres unreachable | `degraded` | 200 |
+| Redis unreachable | `down` | 503 |
+
+Each probe declares its own severity, so `healthz` never decides which dependency is
+fatal: returning `down` means fatal (Redis), returning `degraded` means non-fatal
+(Postgres — accounting degrades, traffic keeps flowing). An unwired probe reports
+**`unknown`, never `ok`**: a health check that asserts an unchecked dependency is a
+fabricated operational signal and hides a dead Redis behind a green dashboard.
 
 Redis down is `down`, not `degraded`: without a ledger the gateway cannot reserve capacity,
 and admitting traffic would over-serve keys into `429` storms. **Health checks do not count
