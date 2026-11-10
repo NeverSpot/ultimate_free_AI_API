@@ -15,9 +15,9 @@ test('credential pool: parses one key per provider', () => {
     TOKENHARBOR_KEYS: 'tokenharbor-key',
   });
 
-  assert.deepEqual(pool.providers(), ['nvidia-nim', 'openrouter', 'tokenharbor']);
+  assert.deepEqual(pool.providers(), ['nvidia', 'openrouter', 'tokenharbor']);
   assert.equal(pool.size(), 3);
-  assert.equal(pool.getCandidates('nvidia-nim')[0]?.secret, 'nim-key');
+  assert.equal(pool.getCandidates('nvidia')[0]?.secret, 'nim-key');
   assert.equal(pool.credentialsFor('openrouter')[0]?.secret, 'openrouter-key');
   assert.equal(pool.getCandidates('tokenharbor')[0]?.secret, 'tokenharbor-key');
   assert.equal(pool.getCandidates('openrouter')[0]?.label, 'openrouter-1');
@@ -38,9 +38,9 @@ test('credential pool: three keys for one provider give three distinct credentia
 test('credential pool: blank and whitespace entries are skipped', () => {
   const pool = loadCredentialPool({ NVIDIA_NIM_KEYS: '  a ,, b , ,c,  ' });
 
-  assert.equal(pool.size('nvidia-nim'), 3);
+  assert.equal(pool.size('nvidia'), 3);
   assert.deepEqual(
-    pool.getCandidates('nvidia-nim').map((credential) => credential.secret),
+    pool.getCandidates('nvidia').map((credential) => credential.secret),
     ['a', 'b', 'c'],
   );
 
@@ -62,10 +62,10 @@ test('credential pool: the same key under two providers stays two credentials', 
     OPENROUTER_KEYS: 'shared-key',
   });
 
-  assert.equal(pool.size('nvidia-nim'), 1);
+  assert.equal(pool.size('nvidia'), 1);
   assert.equal(pool.size('openrouter'), 1);
   assert.equal(pool.size(), 2);
-  assert.notEqual(pool.getCandidates('nvidia-nim')[0]?.id, pool.getCandidates('openrouter')[0]?.id);
+  assert.notEqual(pool.getCandidates('nvidia')[0]?.id, pool.getCandidates('openrouter')[0]?.id);
 });
 
 test('credential pool: ids are stable across two separate loads of the same env', () => {

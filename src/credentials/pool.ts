@@ -20,7 +20,7 @@ export interface CredentialPool {
 
 /** Env var to provider. One line per provider; adding one is a one-line change. */
 const ENV_PROVIDERS: ReadonlyArray<readonly [envVar: string, provider: ProviderId]> = [
-  ['NVIDIA_NIM_KEYS', 'nvidia-nim'],
+  ['NVIDIA_NIM_KEYS', 'nvidia'],
   ['OPENROUTER_KEYS', 'openrouter'],
   ['TOKENHARBOR_KEYS', 'tokenharbor'],
 ];
