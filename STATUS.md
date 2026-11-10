@@ -2,28 +2,22 @@
 
 > Handoff file. Read first, rewrite last. Keep under 25 lines.
 
-- **Current block:** 4 — provider registry + free-model discovery (delegated, in flight)
-- **Last green verify:** `npm run verify` -> exit 0, 124 tests, ~1s
-- **Mode:** unattended overnight run. Target: finish **Phase A** (Blocks 4, 5, then the gate).
+- **Current block:** 5 — Postgres model registry (delegated, in flight)
+- **Last green verify:** `npm run verify` -> exit 0, 134 tests, ~5s
+- **Mode:** unattended overnight run. Target: finish **Phase A**.
 
-## Overnight plan (2026-11-11)
+## Overnight progress (2026-11-11)
 
-1. Block 4 — registry + discovery + `npm run registry:list` + the Provider test (4th adapter, zero edits).
-2. Block 5 — Postgres `models` table, versioned migrations, hourly refresh, last-known-good retention.
-3. **Phase A gate** — Provider test and the Capacity test (3 credentials at 30 RPM serving 60 RPM
-   with zero client-visible 429s) must both pass.
+- [x] Block 4 — registry + discovery + `registry:list` (599 models, 20 free, 3.2s) + Provider test
+- [x] Single composition root `src/providers/defaults.ts`; invariant 2 restated truthfully
+- [ ] Block 5 — Postgres `models` table, idempotent migrations, hourly refresh, last-known-good
+- [ ] **Phase A gate** — Capacity test (3 credentials at 30 RPM serving 60 RPM, zero client 429s)
 
 ## Done
 
-- Blocks 0-3d: Fastify layer, three adapters, credential pool. 124 hermetic tests.
-- `npm run smoke` passes live on all three providers (26s).
-- Provider ids unified across pool / adapters / smoke; guarded by `provider-identity.test.ts`.
-- CodeGraph indexed and adopted (AGENTS.md rule: `codegraph impact` before interface edits).
-
-## Known red
-
-- none
+Blocks 0-4. Three adapters (NVIDIA / OpenRouter / Token Harbor), credential pool, provider
+registry, `npm run smoke` live 3/3, 134 hermetic tests.
 
 ## Do not touch without a human
 
-- `PROJECT.md` structure, `.env` / `.env.local`, git history rewrites, `git push` (no remote exists).
+`PROJECT.md` structure, `.env` / `.env.local`, git history rewrites, `git push` (no remote exists).
