@@ -4,6 +4,7 @@
   "description": "OpenAI-compatible gateway that pools free-tier provider keys with rate-limit-aware routing and failover.",
   "main": "dist/index.js",
   "scripts": {
+    "setup": "node scripts/setup.mjs",
     "dev": "node --watch --env-file-if-exists=.env --import tsx src/index.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node --env-file-if-exists=.env dist/index.js",

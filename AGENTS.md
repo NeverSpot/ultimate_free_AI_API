@@ -15,6 +15,7 @@ Run from the repo root. **If a command is not in this table, it does not exist y
 
 | Task | Command |
 |---|---|
+| bootstrap a fresh clone | `npm run setup` |
 | install | `npm ci` |
 | dev (watch) | `npm run dev` |
 | build + run | `npm run build && npm start` |
@@ -57,17 +58,28 @@ The request lifecycle is ordered. Do not reorder it.
 
 ## Where things live
 
+The tree already exists — create files inside it, do not invent new directories.
+
 | Path | Holds |
 |---|---|
-| `src/core/` | canonical types, `select()`, `route()`, `execute()` |
-| `src/http/` | Express app, routes, middleware |
-| `src/providers/` | one adapter per provider, plus the mock adapter |
-| `src/credentials/` | the credential pool |
-| `src/limits/` | Redis rate-limit ledger and its Lua script |
-| `src/resilience/` | breaker, error classification, `retry-after` parsing |
-| `src/telemetry/` | Postgres accounting |
-| `src/eval/` | deterministic eval harness |
-| `test/unit/` | hermetic tests — no network, no Docker |
+| `src/core/` | `types.ts`, `select.ts`, `route.ts`, `execute.ts`, `ids.ts` |
+| `src/http/` | `server.ts`; `routes/`; `middleware/` |
+| `src/providers/` | `types.ts`, `registry.ts`, `mock.ts`, `groq.ts`, `gemini.ts`, `openrouter.ts` |
+| `src/credentials/` | `pool.ts`, `vault.ts`, `store.ts` |
+| `src/limits/` | `ledger.ts`, `ledger.lua`, `window.ts` |
+| `src/routing/` | `store.ts`, `json-store.ts`, `eval-store.ts` |
+| `src/resilience/` | `breaker.ts`, `classify.ts`, `retry-after.ts` |
+| `src/budget/` | `limiter.ts`, `reserve.lua` |
+| `src/telemetry/` | `store.ts`, `logger.ts` |
+| `src/eval/` | `grade.ts`, `run.ts`, `prompts/` |
+| `src/config/` | `env.ts` — the only place env vars are read |
+| `test/unit/` | hermetic: no network, no Docker, no real keys |
+| `test/integration/` | needs `npm run db:up`; run explicitly |
+| `test/fakes/` | fake provider adapter, fake redis, fake clock |
+| `migrations/` | `*.sql`, numbered, up + down |
+| `load/` | `artillery.yml` and load scenarios |
+| `docker/` | `Dockerfile`, `nginx.conf` (compose file is at the repo root) |
+| `scripts/` | one-off and bootstrap scripts |
 | `docs/` | architecture, testing, ADRs — read on demand, never auto-loaded |
 
 ## Conventions

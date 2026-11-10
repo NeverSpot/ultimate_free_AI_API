@@ -374,22 +374,31 @@ decision is what makes pooling possible later.
 
 ```
 src/
-  core/         types.ts, execute.ts, ids.ts
-  http/         server.ts, middleware/, routes/
+  core/         types.ts, select.ts, route.ts, execute.ts, ids.ts
+  http/         server.ts, routes/, middleware/
   providers/    types.ts, registry.ts, mock.ts, groq.ts, gemini.ts, openrouter.ts
   credentials/  pool.ts, vault.ts, store.ts
   limits/       ledger.ts, ledger.lua, window.ts
-  routing/      select.ts, route.ts, store.ts, json-store.ts, eval-store.ts
+  routing/      store.ts, json-store.ts, eval-store.ts
   resilience/   breaker.ts, classify.ts, retry-after.ts
   budget/       limiter.ts, reserve.lua
   telemetry/    store.ts, logger.ts
-  eval/         prompts/, grade.ts, run.ts
+  eval/         grade.ts, run.ts, prompts/
   config/       env.ts
-migrations/     *.sql
-test/           *.test.ts
-load/           artillery.yml
-docker/         compose, nginx.conf
+test/
+  unit/         hermetic, no network / Docker / real keys
+  integration/  needs `npm run db:up`
+  fakes/        fake provider adapter, fake redis, fake clock
+migrations/     *.sql (numbered, up + down)
+load/           artillery.yml + scenarios
+docker/         Dockerfile, nginx.conf   (docker-compose.yml lives at the repo root)
+scripts/        setup.mjs and one-off tooling
+docs/           architecture.md, testing.md, adr/
+artifacts/      gitignored; verify logs
 ```
+
+Every directory above exists and is tracked. Create files inside it; do not invent sibling
+directories — `AGENTS.md` carries the same map, and the two must stay in sync.
 
 ## 9. Locked decisions
 

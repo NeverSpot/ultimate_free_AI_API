@@ -28,5 +28,6 @@ desktop.ini
 
 # test / tmp
 coverage/
-artifacts/
+artifacts/*
+!artifacts/.gitkeep
 tmp/

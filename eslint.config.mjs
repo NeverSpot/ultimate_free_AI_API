@@ -10,6 +10,23 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   prettier,
   {
+    files: ['**/*.{js,mjs,cjs}'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        Buffer: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        __dirname: 'readonly',
+        require: 'readonly',
+        module: 'readonly',
+      },
+    },
+  },
+  {
     files: ['**/*.ts'],
     languageOptions: { ecmaVersion: 2022, sourceType: 'module' },
     rules: {
