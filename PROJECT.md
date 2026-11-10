@@ -405,6 +405,10 @@ directories — `AGENTS.md` carries the same map, and the two must stay in sync.
 - **Runtime:** Node 24, TypeScript 5.5, CommonJS, `tsc` -> `dist/`. Node 24 gives native `fetch`, web `ReadableStream`, `--env-file`, `node:test`.
 - **Test runner:** `node:test` — zero dependencies.
 - **HTTP client:** native `fetch` only. No axios.
+- **Schema layer:** **TypeBox** (`@sinclair/typebox`) — native ajv integration, zero shims, types inferred from the schema so canonical types and HTTP schemas cannot drift.
+- **Gateway auth (Phase A):** `Authorization: Bearer <ADMIN_TOKEN>`, constant-time compare in `preHandler`. A `gateway_keys` table replaces it at Block 11.
+- **Response headers:** `x-request-id`, `x-gateway-provider`, `x-gateway-model`, `x-gateway-attempts`, `x-gateway-latency-ms`, `x-gateway-tokens-estimated`, plus `retry-after` on 429/503.
+- **Timeouts:** 10s per attempt, 30s total request deadline. Both env-configurable.
 - **HTTP framework:** **Fastify 5**. Native JSON Schema validation, `fast-json-stringify` serialisation that strips unknown fields, pino logging built in, and `app.inject()` for hermetic route tests. See `docs/adr/0002-http-framework.md`.
 - **Database:** **PostgreSQL 16** — append-only telemetry, SQL aggregations for p95 and spend; `NUMERIC` for money, `timestamptz` for time. Local via Docker; hosted option Neon or Supabase.
 - **State:** Redis for the rate-limit ledger, breaker state, credential parking, budget reservation, idempotency.
@@ -418,7 +422,6 @@ directories — `AGENTS.md` carries the same map, and the two must stay in sync.
 
 ## 10. Open decisions
 
-- Schema layer at the HTTP boundary: TypeBox (native, zero shims) vs Zod + `fastify-type-provider-zod` (familiar, one shim) (Block 2).
 - Budget unit: dollars, tokens, or both (Block 14).
 - Whether the public demo ships with real keys at all (Block 17).
 - Default spread policy when several candidates have equal capacity: round-robin or least-recently-used (Block 9).

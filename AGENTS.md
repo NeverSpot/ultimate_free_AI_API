@@ -82,7 +82,7 @@ The tree already exists — create files inside it, do not invent new directorie
 | `load/` | `artillery.yml` and load scenarios |
 | `docker/` | `Dockerfile`, `nginx.conf` (compose file is at the repo root) |
 | `scripts/` | one-off and bootstrap scripts |
-| `docs/` | architecture, testing, ADRs — read on demand, never auto-loaded |
+| `docs/` | `api.md` (the HTTP contract — read before touching routes), `architecture.md`, `testing.md`, `adr/` — on demand, never auto-loaded |
 
 ## Conventions
 
