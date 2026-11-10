@@ -66,7 +66,7 @@ The tree already exists — create files inside it, do not invent new directorie
 |---|---|
 | `src/core/` | `types.ts`, `select.ts`, `route.ts`, `execute.ts`, `ids.ts` |
 | `src/http/` | `server.ts`; `routes/`; `middleware/` |
-| `src/providers/` | `types.ts`, `registry.ts`, `mock.ts`, `groq.ts`, `gemini.ts`, `openrouter.ts` |
+| `src/providers/` | `types.ts`, `registry.ts`, `mock.ts`, `nvidia-nim.ts`, `openrouter.ts`, `tokenharbor.ts` |
 | `src/credentials/` | `pool.ts`, `vault.ts`, `store.ts` |
 | `src/limits/` | `ledger.ts`, `ledger.lua`, `window.ts` |
 | `src/routing/` | `store.ts`, `json-store.ts`, `eval-store.ts` |

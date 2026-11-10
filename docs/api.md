@@ -74,7 +74,7 @@ response should never see a field they do not know.
 | Header | Example | Purpose |
 |---|---|---|
 | `x-request-id` | `01JBQ4…` | gateway ULID; echoes a supplied `x-request-id` if present |
-| `x-gateway-provider` | `groq` | which provider served it |
+| `x-gateway-provider` | `openrouter` | which provider served it |
 | `x-gateway-model` | `llama-3.3-70b-versatile` | which model actually ran |
 | `x-gateway-attempts` | `2` | how many candidates were tried |
 | `x-gateway-latency-ms` | `412` | gateway-side elapsed time |
@@ -164,7 +164,7 @@ toward rate limits and are never routed to a provider.**
     {
       "id": "llama-3.3-70b-versatile",
       "object": "model",
-      "owned_by": "groq",
+      "owned_by": "openrouter",
       "context_window": 131072,
       "is_free": true
     }

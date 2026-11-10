@@ -4,7 +4,7 @@
 
 - **Current block:** 2 — HTTP buffered path (implemented, verified, committed)
 - **Last green verify:** `npm run verify` → exit 0, 19 tests, ~0.9s
-- **Next action:** start Block 3 in `PROJECT.md` — real adapters (Groq, Gemini, OpenRouter) + the credential pool.
+- **Next action:** start Block 3 in `PROJECT.md` — real adapters (NVIDIA NIM, OpenRouter, Token Harbor) + the credential pool.
 
 ## Done
 
