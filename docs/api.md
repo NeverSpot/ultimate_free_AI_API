@@ -29,8 +29,24 @@ OpenAI-compatible so a stock SDK works by changing `base_url` alone.
 | `stream` | boolean | no | default false. **`true` → `501` until Block 10** |
 | `user` | string | no | accepted, passed through |
 
-Unknown fields are **rejected** (`additionalProperties: false`) rather than silently dropped —
-a client typo should fail loudly at the boundary, once.
+### Ignored vs rejected — the rule that keeps `base_url` swap honest
+
+Rejecting unknown fields (`additionalProperties: false`) looks strict and is **wrong here**:
+a stock OpenAI client routinely sends `seed`, `presence_penalty`, `frequency_penalty`,
+`store`, `service_tier`, `metadata`. Rejecting those breaks the one promise this API makes —
+that you change `base_url` and nothing else.
+
+So the boundary is lenient by default, with a hard split:
+
+| Class | Examples | Behaviour |
+|---|---|---|
+| **Harmless** — cannot change the answer | `seed`, `presence_penalty`, `frequency_penalty`, `logit_bias`, `store`, `metadata`, `service_tier`, `user` | accepted, **ignored**, logged at debug |
+| **Meaning-changing** — we cannot honour it | `n` > 1, `logprobs`, `top_logprobs`, `tools`, `tool_choice`, `modalities`, `audio`, `stream: true` (until Block 10) | **`501 unsupported`** |
+| **Malformed** — wrong type or missing required | `messages` absent, `temperature: "hot"` | **`400 invalid_request_error`** |
+
+The principle: **ignore only what cannot change the answer; reject loudly what would.** A
+silently dropped `n: 2` returns one choice and looks like a bug in the client. A `501` names
+the cause.
 
 ### Response body — 200
 
@@ -159,9 +175,11 @@ queries a provider on request. `context_window` and `is_free` are `null` when un
 | Gap | Behaviour now | Closes at |
 |---|---|---|
 | `stream: true` | `501 unsupported` | Block 10 |
-| `tools` / `tool_use` | rejected at the boundary | post-Block 12, if eval needs it |
+| `tools` / `tool_choice` | `501 unsupported` | post-Block 12, if eval needs it |
+| `logprobs` / `top_logprobs` | `501 unsupported` | never |
+| `n` > 1 | `501 unsupported` | never (single choice by design) |
 | `idempotency-key` | accepted, **ignored**, logged at debug | Block 15 |
-| `n` > 1 | rejected | never (not supported by design) |
+| `seed`, `presence_penalty`, etc. | accepted, ignored | never |
 | Per-client rate limiting | absent — only the gateway key is checked | Block 13 |
 | `/v1/models` | `501` | Block 4 |
 
