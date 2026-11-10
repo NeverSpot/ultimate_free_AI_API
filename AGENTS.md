@@ -62,6 +62,25 @@ The request lifecycle is ordered. Do not reorder it.
    sends `Bearer undefined` and the failure looks like an auth problem. Access `cred.secret`
    directly. `JSON.stringify(cred)` is safe because `toJSON()` returns `{id, provider, label}`.
 
+## Code intelligence
+
+This repo is indexed by **CodeGraph** (`.codegraph/`, auto-synced by a daemon, gitignored —
+never commit it). Prefer it over `grep` when the question is structural.
+
+| Question | Command |
+|---|---|
+| index stats | `codegraph status` |
+| find a symbol | `codegraph query <name>` |
+| one symbol's source + caller/callee trail | `codegraph node <name>` |
+| who calls this | `codegraph callers <name>` |
+| **what breaks if I change this** | `codegraph impact <name>` |
+| context for a task | `codegraph context "<task description>"` |
+
+**Always run `codegraph impact` before editing a shared interface.** Measured baseline:
+changing `ProviderAdapter` touches **92 symbols** across `types.ts`, all three adapters and
+their tests. That number is the practical meaning of the "adding a provider = one file"
+invariant — the interface is the expensive seam, so it must not churn.
+
 ## Where things live
 
 The tree already exists — create files inside it, do not invent new directories.

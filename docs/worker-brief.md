@@ -57,3 +57,10 @@ OpenCode's own summary is a claim, never evidence. After every run:
 A run that worked: `opencode run '<brief>' --format json` producted 29 events
 (14 `read`, 2 `shell`, 0 writes) before being killed mid-read — proving the invocation
 form is correct and that OpenCode front-loads reading, which is normal and not a hang.
+
+## Before delegating a change to a shared interface
+
+Run `codegraph impact <symbol>` first and put the affected-symbol count in the OpenCode
+brief. `ProviderAdapter` currently touches ~92 symbols; a change that leaks beyond one adapter
+file means the interface is wrong, not the task. Use `codegraph callers <symbol>` to confirm
+what actually consumes a module rather than grepping for a name.
