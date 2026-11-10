@@ -26,6 +26,9 @@ desktop.ini
 .vscode/*
 !.vscode/extensions.json
 
+# tooling / editor caches
+.codegraph/
+
 # test / tmp
 coverage/
 artifacts/*

@@ -105,3 +105,45 @@ Uniform JSON, unlike NVIDIA:
 | Free allowance spent | 429 | `{"error":{"type":"free_tier_limit_reached"}}` + `Retry-After: 3600` |
 
 No `detail` or `title` keys — the envelope is always `{error:{message,type,code}}`.
+
+## Verified — OpenRouter (433 models)
+
+| Case | Status | Body |
+|---|---|---|
+| Bad key | 401 | `{"error":{"message":"User not found.","code":401}}` |
+| **Unknown model** | **400** | `"<id> is not a valid model ID"` |
+| Malformed body | 400 | standard `invalid_request_error` |
+
+**`error.code` is a NUMBER and there is no `error.type`** — the opposite of Token Harbor, and a
+different shape again from NVIDIA's plain-text 404. Three providers, three error formats.
+
+### Three findings that change later blocks
+
+1. **`pricing` values are STRINGS**, not numbers — `prompt: "0.00000028"`, `completion: "0"`.
+   Comparing `pricing.prompt === 0` misclassifies all 433 models. Free means
+   `Number(prompt) === 0 && Number(completion) === 0` on every pricing field.
+2. **`"-1"` is a variable-pricing sentinel, not free** — 8 models carry it
+   (`openrouter/auto`, `openrouter/auto-code`, `typesafe/jev-router`, `nvidia/switchyard`, …).
+   A `<= 0` test would wrongly mark them free.
+3. **Unknown model ids return `400`, not `404`.** So `model_gone` is only reachable by matching
+   the message `/is not a valid model ID/i` — brittle if OpenRouter rewords it. Documented as a
+   known fragility rather than hidden.
+
+Live split: **16 free / 417 null**.
+
+### There are NO `x-ratelimit-*` headers
+
+Not on 200, 400 or 401. `Retry-After` appears only on 429, and no 429 was produced on this
+account. The real quota surface is **`GET /auth/key`**:
+
+```
+is_free_tier: true, usage: 0,
+free_model_daily_requests: { used: 1, limit: 50, remaining: 49 },
+rate_limit: { requests: -1, interval: "10s", note: "deprecated and safe to ignore" }
+```
+
+**This is the first provider that can be asked its remaining budget directly**, and it is a
+daily window (`limit: 50`), not a per-minute one — reinforcing the multi-window ledger
+requirement from the Token Harbor finding. Block 6 should poll `/auth/key` for OpenRouter
+rather than inferring limits from 429s. Note `rate_limit.requests: -1` is deprecated and must
+be ignored, not parsed as a zero limit.
