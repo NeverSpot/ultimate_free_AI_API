@@ -1,6 +1,6 @@
 # LLM Gateway — Copilot instructions
 
-Stack: Node 24, TypeScript (CommonJS, ES2022), Express, PostgreSQL 16, Redis, Docker.
+Stack: Node 24, TypeScript (CommonJS, ES2022), **Fastify 5**, PostgreSQL 16, Redis, Docker.
 One OpenAI-compatible endpoint in front of a pool of user-provided LLM provider keys.
 
 ## Commands

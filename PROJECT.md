@@ -154,12 +154,12 @@ decision is what makes pooling possible later.
 - **Done when:** mock adapter returns a `CanonicalResponse`; test asserts shape and that the mock honours its own RPM ceiling.
 - **Pitfall:** model the response on the *union* of what providers return, then down-convert per adapter. Not on OpenAI's shape alone.
 
-#### Block 2 — HTTP layer, buffered path
+#### Block 2 — HTTP layer (Fastify), buffered path
 
-- **Learn (1.5h):** hop-by-hop headers (`Connection`, `Keep-Alive`, `Transfer-Encoding`, `Proxy-*`) must be stripped; status passthrough; connect vs read vs total timeout.
-- **Build:** Express app, request-ID middleware, `POST /v1/chat/completions`, `GET /healthz`. Non-streaming only.
-- **Done when:** `curl` against localhost returns an OpenAI-shaped completion from the mock.
-- **Pitfall:** return errors in OpenAI's envelope (`{"error": {"type","message","code"}}`), never Express's HTML default.
+- **Learn (2h):** the Fastify lifecycle — `onRequest` -> `preHandler` -> `handler` -> `onSend` -> `onError` -> `onResponse`; JSON Schema request validation and `fast-json-stringify` response serialisation (it **strips unknown fields**, which is how provider payloads stop leaking); hop-by-hop headers (`Connection`, `Keep-Alive`, `Transfer-Encoding`, `Proxy-*`) must be stripped; connect vs read vs total timeout.
+- **Build:** `src/http/server.ts` — Fastify 5 instance, pino logger, `onRequest` request-ID hook, `POST /v1/chat/completions` (non-streaming), `GET /healthz` with a schema. Route tests via `app.inject()` — no port binding, no network.
+- **Done when:** `npm run test -- --test-name-pattern "http"` passes via `inject()`, and `curl` against the running server returns an OpenAI-shaped completion from the mock adapter.
+- **Pitfall:** Fastify serialises responses from the route's `response` schema. A field missing from the schema is **silently dropped** — if `usage` vanishes from your JSON, the schema is wrong, not the handler.
 
 #### Block 3 — Real adapters + the credential pool
 
@@ -405,6 +405,7 @@ directories — `AGENTS.md` carries the same map, and the two must stay in sync.
 - **Runtime:** Node 24, TypeScript 5.5, CommonJS, `tsc` -> `dist/`. Node 24 gives native `fetch`, web `ReadableStream`, `--env-file`, `node:test`.
 - **Test runner:** `node:test` — zero dependencies.
 - **HTTP client:** native `fetch` only. No axios.
+- **HTTP framework:** **Fastify 5**. Native JSON Schema validation, `fast-json-stringify` serialisation that strips unknown fields, pino logging built in, and `app.inject()` for hermetic route tests. See `docs/adr/0002-http-framework.md`.
 - **Database:** **PostgreSQL 16** — append-only telemetry, SQL aggregations for p95 and spend; `NUMERIC` for money, `timestamptz` for time. Local via Docker; hosted option Neon or Supabase.
 - **State:** Redis for the rate-limit ledger, breaker state, credential parking, budget reservation, idempotency.
 - **Routing target:** a **(model, credential) pair**, never a bare model.
@@ -417,6 +418,7 @@ directories — `AGENTS.md` carries the same map, and the two must stay in sync.
 
 ## 10. Open decisions
 
+- Schema layer at the HTTP boundary: TypeBox (native, zero shims) vs Zod + `fastify-type-provider-zod` (familiar, one shim) (Block 2).
 - Budget unit: dollars, tokens, or both (Block 14).
 - Whether the public demo ships with real keys at all (Block 17).
 - Default spread policy when several candidates have equal capacity: round-robin or least-recently-used (Block 9).

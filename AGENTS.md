@@ -55,6 +55,8 @@ The request lifecycle is ordered. Do not reorder it.
 4. Breaker transitions are `CLOSED`/`OPEN`/`HALF_OPEN` only, stored in Redis, never in a
    module-level variable.
 5. Streaming failover is allowed only **before the first token**.
+6. After `reply.hijack()` you own the response. Fastify must never write again — not even an
+   error. Send Fastify errors **before** hijacking, or terminate the stream yourself.
 
 ## Where things live
 
