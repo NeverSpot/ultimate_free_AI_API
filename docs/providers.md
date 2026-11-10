@@ -29,3 +29,23 @@ The OpenCode provider config at `~/.config/opencode/opencode.json` points Token 
 `302 -> hugedomains.com`. The live endpoint is `https://tokenharbor.ai/v1`.
 Hermes's own `config.yaml` already uses the correct host. Do not copy the base URL out of
 the OpenCode config.
+
+## Verified error envelopes (NVIDIA NIM, probed twice — by the worker and by Hermes)
+
+NVIDIA does **not** return a uniform error shape. The adapter must handle all three:
+
+| Case | Status | Body |
+|---|---|---|
+| Bad key | 401 | `{"status":401,"title":"Unauthorized","detail":"Invalid JWT serialization: Missing dot delimiter(s)"}` |
+| **Unknown model** | **404** | **`404 page not found` — plain text, not JSON** |
+| Empty `messages` | 400 | `{"message":"Validation: The 'messages' field cannot be empty...","type":"Bad Request","code":400}` |
+| Malformed JSON | 400 | `{"error":{"message":"request body is not valid JSON","type":"invalid_request_error","param":null,"code":"invalid_json"}}` |
+
+The plain-text 404 is the trap: calling `response.json()` on it throws, and a naive adapter
+reports `upstream` instead of `model_gone`. `NvidiaNimAdapter` catches the parse failure and
+maps 404 explicitly before falling back.
+
+Confirmed independently: an unknown model (`definitely/not-a-real-model`) returns
+`404` + `404 page not found`. So `404 -> model_gone` is correct for NVIDIA, but the
+classification is only valid because the body is non-JSON — do not assume the same for the
+other two providers, which return structured JSON errors.
