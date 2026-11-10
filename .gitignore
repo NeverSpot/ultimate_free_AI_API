@@ -1,0 +1,32 @@
+# deps
+node_modules/
+
+# build
+dist/
+out-tsc/
+
+# env & secrets  (never commit keys)
+.env
+.env.*
+!.env.example
+
+# logs
+.eslintcache
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# test / tmp
+coverage/
+artifacts/
+tmp/

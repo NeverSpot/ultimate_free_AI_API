@@ -1,0 +1,7 @@
+dist/
+node_modules/
+coverage/
+artifacts/
+package-lock.json
+*.md
+docs/**/*.md
