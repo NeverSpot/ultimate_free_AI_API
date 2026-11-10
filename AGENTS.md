@@ -57,6 +57,10 @@ The request lifecycle is ordered. Do not reorder it.
 5. Streaming failover is allowed only **before the first token**.
 6. After `reply.hijack()` you own the response. Fastify must never write again — not even an
    error. Send Fastify errors **before** hijacking, or terminate the stream yourself.
+7. Never spread or clone a `Credential`. `secret` is a **non-enumerable** own property, so
+   `{ ...cred }`, `structuredClone` and JSON round-trips silently drop it — the adapter then
+   sends `Bearer undefined` and the failure looks like an auth problem. Access `cred.secret`
+   directly. `JSON.stringify(cred)` is safe because `toJSON()` returns `{id, provider, label}`.
 
 ## Where things live
 
