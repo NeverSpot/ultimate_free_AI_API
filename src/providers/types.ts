@@ -1,4 +1,4 @@
-import type { CanonicalRequest, CanonicalResponse } from '../core/types';
+import type { CanonicalChunk, CanonicalRequest, CanonicalResponse } from '../core/types';
 
 /** Opaque provider identifier. Never a closed union: adding a provider must not edit this. */
 export type ProviderId = string;
@@ -28,5 +28,10 @@ export interface ProviderAdapter {
   readonly id: ProviderId;
   readonly supportsStreaming: boolean;
   chat(req: CanonicalRequest, cred: Credential, signal?: AbortSignal): Promise<CanonicalResponse>;
+  stream(
+    req: CanonicalRequest,
+    cred: Credential,
+    signal?: AbortSignal,
+  ): AsyncIterable<CanonicalChunk>;
   listModels(cred: Credential): Promise<ModelInfo[]>;
 }
