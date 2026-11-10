@@ -89,6 +89,11 @@ No feature work begins until all four pass, and they re-run after every block.
 
 Test 4 is the one that proves the product exists.
 
+> **Gate placement, corrected 2026-11-11.** The Capacity test cannot pass in Phase A: it needs a
+> per-credential budget ledger and a selector, which are Blocks 6 and 9. Phase A's gate is
+> therefore the **Provider test only** (passed at Block 4). The Capacity test moves to the
+> **Phase B gate**, after Block 9 — it is unchanged in content, only in when it can run.
+
 ---
 
 ## 6. Build blocks
