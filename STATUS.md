@@ -2,25 +2,23 @@
 
 > Handoff file. Read first, rewrite last. Keep under 25 lines.
 
-- **Current block:** 7 — error classification + 429 semantics (Phase B), delegated
-- **Last green verify:** `npm run verify` -> exit 0, **155 hermetic tests**
-- **Phase A: COMPLETE.**
+- **Current block:** 8 — circuit breaker + credential parking (delegated)
+- **Last green verify:** `npm run verify` -> exit 0, **192 hermetic tests** (+13 integration)
+- **Phase A: COMPLETE.** Phase B: Blocks 6-7 done, 8 in flight.
 
-## Where we are
+## Done in Phase B
 
-- Blocks 0-6 done. 155 hermetic + 13 integration tests.
-- Block 6 shipped the multi-window ledger (`rpm`/`rpd`/`rpw`, one atomic Lua, max-wait,
-  blocking window returned). Race proven with a non-atomic control that admitted 2 of 2.
-- Build fixed: `scripts/copy-assets.mjs` ships `.lua` into `dist/`.
-- Gate fixed: integration tests opt in via `npm_lifecycle_event === 'test:int'`, so an
-  ambient `DATABASE_URL` no longer silently adds 5 tests to verify.
+- Block 6 `167c08f` — multi-window ledger (rpm/rpd/rpw, one atomic Lua, max-wait + window tag)
+- Block 7 `cd3228e` — one shared error classifier; 429 split by verdict, not status:
+  ordinary throttle -> rate_limited, Token Harbor free allowance -> exhausted (503), and its
+  Retry-After of 3600 dropped as a ~170x lie against a 7-day reset
 
-## Known gaps (deliberate, tracked)
+## Open items
 
-- Ledger ceilings are `null` until Block 7/8 hydrate them — no real provider refuses yet.
-- `release()` is not rollover-safe; needs a reservation token at Block 9.
-- `retryAfterMs` is a floor; nothing consumes the window tag to park yet (Block 7).
-- No `select()` snapshot for Block 9.
+- Ledger ceilings still `null` — nothing refuses a real provider until 8/9 hydrate them
+- `parkUntil` has no channel through `ProviderError`; Block 9 must call `rateLimitVerdict()`
+- `release()` not rollover-safe (needs a reservation token at Block 9)
+- Capacity test now gates Phase B, after Block 9
 
 ## Do not touch without a human
 
