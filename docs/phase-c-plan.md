@@ -9,13 +9,12 @@
 ## Block 11 — Accounting + Postgres
 
 ### Goal
-Write one `requests` row per **terminal path** (success, failure, timeout, aborted). Replace temp auth with `gateway_keys` table.
+Write one `requests` row per **terminal path** (success, failure, timeout, aborted). Spec schema: two tables (`requests` + `credentials`), no `gateway_keys` table.
 
 ### Files to Create/Modify
-- `migrations/011_accounting.sql` — `requests`, `credentials`, `gateway_keys` tables + indexes
+- `migrations/011_accounting.sql` — `requests` + `credentials` tables per PROJECT.md §255–288 exactly + indexes (`requests(created_at)`, `(provider, model, created_at)`, `(gateway_key_id, created_at)`, `(credential_id, created_at)`). **No `gateway_keys` table in spec — `gateway_key_id` is a bare `uuid` in `requests` (unresolved for now; the `gateway_keys` table may be added only if auth lands in this block, explicitly noting the deviation)**
 - `src/telemetry/store.ts` — insert in `finally` block, batched, NUMERIC for money
 - `src/core/execute.ts` — wire accounting after each attempt
-- `src/http/routes/chat-completions.ts` — extract gateway key, pass to execute
 - `test/integration/accounting.test.ts` — each path writes exactly one row
 
 ### Acceptance Criteria
@@ -32,10 +31,10 @@ npm run test:int -- --test-name-pattern "accounting"
 ## Block 12 — Eval Harness
 
 ### Goal
-100 self-grading prompts (25 × 4 buckets × 3 runs), emit markdown table with **n stated per cell**. No LLM-as-judge.
+100 self-grading prompts (25 × 4 buckets × 3 runs), emit markdown table with **n stated per cell**. No LLM-as-judge — circular and costs money.
 
 ### Files to Create/Modify
-- `src/eval/prompts/` — 4 buckets, 25 files each, JSON Schema / exact match / unit tests / field-level F1
+- `src/eval/prompts/` — 4 buckets, 25 files each, JSON Schema / exact match / hidden unit tests pass@1 / field-level exact match or F1
 - `src/eval/grade.ts` — deterministic graders per bucket
 - `src/eval/run.ts` — orchestration, markdown output
 - `package.json` — add `npm run eval`
@@ -43,7 +42,7 @@ npm run test:int -- --test-name-pattern "accounting"
 ### Acceptance Criteria
 ```bash
 npm run eval
-# → markdown table with n=3 per cell, pass rates per bucket
+# → markdown table with **n=3** stated per cell, pass@1 per bucket
 ```
 
 ### Deviation Log
@@ -54,10 +53,10 @@ npm run eval
 ## Block 13 — `route()` + Routing-Table Store
 
 ### Goal
-Extract `route(candidates, store)` pure function. Two stores: `json-store.ts` (hand-written) + `eval-store.ts` (eval scores). Policy test = swap store, `route()` untouched.
+Extract `route(rankedCandidates, store)` pure function — takes ranked candidates from Block 9 and applies the routing table. Two stores: `json-store.ts` (hand-written) + `eval-store.ts` (eval scores). Policy test = swap store, `route()` untouched.
 
 ### Files to Create/Modify
-- `src/routing/route.ts` — pure function: `route(candidates: Candidate[], store: RoutingStore) => Candidate[]`
+- `src/routing/route.ts` — pure function: `route(rankedCandidates: Candidate[], store: RoutingStore) => Candidate[]`
 - `src/routing/store.ts` — interface `RoutingStore { getScores(): Promise<Map<string, number>> }`
 - `src/routing/json-store.ts` — reads static JSON
 - `src/routing/eval-store.ts` — reads eval harness output
@@ -135,6 +134,10 @@ npm run test:int -- --test-name-pattern "idempotency"
 
 | Block | PROJECT.md Spec | Actual Decision | Rationale | Date |
 |-------|----------------|----------------|-----------|------|
-| — | — | — | — | — |
+| 11 | Two tables (`requests`, `credentials`); `gateway_key_id` is bare `uuid` | Add `gateway_keys` table *only if* auth lands in Block 11; otherwise leave unresolved FK | Spec has no `gateway_keys` table but FK semantics imply one; deferring to avoid scope creep | 2026-11-12 |
+| 12 | 25 prompts per bucket × 4 buckets × 3 runs | Code generation bucket uses hidden unit tests, pass@1 | Matches "hidden unit tests, pass@1" in spec | 2026-11-12 |
+| 13 | `route(rankedCandidates, store)` takes ranked candidates from Block 9 | Interface as `RoutingStore` with `getScores()`; `route()` applies table | Matches spec exactly | 2026-11-12 |
+| 14 | Pre-dispatch reserve, reconcile, release delta | Atomic Lua reserve of worst-case cost; reject 429 before dispatch | Matches spec | 2026-11-12 |
+| 15 | `Idempotency-Key` → Redis, replay, single-flight | Same | Matches spec | 2026-11-12 |
 
 *Add rows as decisions diverge. Keep concise; cite ADR if needed.*
