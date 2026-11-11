@@ -10,7 +10,17 @@ import { listModels, providersSummary, upsertModels } from '../../src/registry/s
  * whole suite reports as skipped inside `npm run verify`; `npm run test:int` runs it.
  */
 const databaseUrl = process.env.DATABASE_URL?.trim() ?? '';
-const skip = databaseUrl.length === 0 ? 'DATABASE_URL is not set' : false;
+// Opt-in on purpose. Keying only off `DATABASE_URL` made the gate silently non-hermetic:
+// a shell with DATABASE_URL exported ran these 5 tests inside `npm run verify` (155 -> 160).
+// npm sets npm_lifecycle_event to the running script name on every platform, which is a
+// portable opt-in that needs no env-var syntax (RUN_INTEGRATION=1 fails under cmd.exe).
+const optedIn =
+  process.env.RUN_INTEGRATION === '1' || process.env.npm_lifecycle_event === 'test:int';
+const skip = !optedIn
+  ? 'RUN_INTEGRATION !== 1'
+  : databaseUrl.length === 0
+    ? 'DATABASE_URL is not set'
+    : false;
 
 /** Row prefix owned by this file, so a shared dev database is never damaged. */
 const PREFIX = 'it-registry-store';
