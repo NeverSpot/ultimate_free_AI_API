@@ -19,6 +19,8 @@ export interface MockFailure {
   retryAfterMs?: number;
   /** Optional HTTP status override. */
   status?: number;
+  /** For streaming: fires after yielding N chunks (0 or undefined = before first chunk). */
+  afterChunks?: number;
 }
 
 export interface MockAdapterOptions {
@@ -41,6 +43,12 @@ export interface MockAdapterOptions {
   sleep?: (ms: number) => Promise<void>;
   /** Deterministic failure injection sequence. */
   failures?: MockFailure[];
+  /** Whether the adapter supports streaming. Default true. */
+  supportsStreaming?: boolean;
+  /** Delay in milliseconds between streamed chunks. */
+  chunkDelayMs?: number;
+  /** Explicit custom chunks to yield in stream(). */
+  customChunks?: CanonicalChunk[];
 }
 
 /**
@@ -52,7 +60,7 @@ export interface MockAdapterOptions {
  */
 export class MockProviderAdapter implements ProviderAdapter {
   readonly id: ProviderId;
-  readonly supportsStreaming = false;
+  readonly supportsStreaming: boolean;
 
   private readonly model: string;
   private readonly content: string;
@@ -64,6 +72,8 @@ export class MockProviderAdapter implements ProviderAdapter {
   private readonly latencyMs: number;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly failures: MockFailure[];
+  private readonly chunkDelayMs: number;
+  private readonly customChunks?: CanonicalChunk[];
 
   /** Per-credential request timestamps for RPM tracking. */
   private readonly requestTimestamps: Map<string, number[]> = new Map();
@@ -75,6 +85,7 @@ export class MockProviderAdapter implements ProviderAdapter {
 
   constructor(options: MockAdapterOptions = {}) {
     this.id = options.id ?? 'mock';
+    this.supportsStreaming = options.supportsStreaming ?? true;
     this.model = options.model ?? 'mock-model';
     this.content = options.content ?? 'Hello from the mock adapter.';
     this.finishReason = options.finishReason ?? 'stop';
@@ -86,6 +97,8 @@ export class MockProviderAdapter implements ProviderAdapter {
     this.latencyMs = options.latencyMs ?? 0;
     this.sleep = options.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
     this.failures = options.failures ?? [];
+    this.chunkDelayMs = options.chunkDelayMs ?? 0;
+    this.customChunks = options.customChunks;
   }
 
   /** Returns the number of chat calls made so far. */
@@ -225,15 +238,177 @@ export class MockProviderAdapter implements ProviderAdapter {
   }
 
   async *stream(
-    _req: CanonicalRequest,
-    _cred: Credential,
-    _signal?: AbortSignal,
+    req: CanonicalRequest,
+    cred: Credential,
+    signal?: AbortSignal,
   ): AsyncIterable<CanonicalChunk> {
-    throw new ProviderError('unsupported', 'streaming lands in Block 10', {
-      provider: this.id,
-    });
-    // Unreachable yield to satisfy require-yield
-    yield undefined as never;
+    if (!this.supportsStreaming) {
+      throw new ProviderError('unsupported', 'Streaming not supported by this mock adapter', {
+        provider: this.id,
+      });
+    }
+
+    if (signal?.aborted) {
+      throw new ProviderError('timeout', 'Request aborted by caller', {
+        provider: this.id,
+        status: 504,
+      });
+    }
+
+    if (this.latencyMs > 0) {
+      await this.sleep(this.latencyMs);
+    }
+
+    if (signal?.aborted) {
+      throw new ProviderError('timeout', 'Request aborted by caller', {
+        provider: this.id,
+        status: 504,
+      });
+    }
+
+    const now = this.clock();
+
+    if (this.rpmCeiling !== undefined) {
+      const timestamps = this.requestTimestamps.get(cred.id) ?? [];
+      const windowStart = now - this.windowMs;
+      const recent = timestamps.filter((t) => t > windowStart);
+
+      if (recent.length >= this.rpmCeiling) {
+        const oldestInWindow = recent[0]!;
+        const retryAfterMs = Math.max(1, oldestInWindow + this.windowMs - now);
+        throw new ProviderError('rate_limited', 'RPM ceiling exceeded', {
+          provider: this.id,
+          status: 429,
+          retryAfterMs,
+        });
+      }
+
+      recent.push(now);
+      this.requestTimestamps.set(cred.id, recent);
+    }
+
+    const currentCallIndex = this.callCount;
+    this.callCount++;
+
+    while (this.failureFireCounts.length < this.failures.length) {
+      this.failureFireCounts.push(0);
+    }
+
+    // Check pre-chunk failures (afterChunks is 0 or undefined)
+    for (let i = 0; i < this.failures.length; i++) {
+      const failure = this.failures[i];
+      if (!failure) continue;
+      if (failure.afterChunks !== undefined && failure.afterChunks > 0) continue;
+
+      const fired = this.failureFireCounts[i] ?? 0;
+      const maxTimes = failure.times ?? 1;
+
+      if (fired < maxTimes) {
+        const shouldFire = failure.when === undefined || failure.when(currentCallIndex, cred);
+        if (shouldFire) {
+          this.failureFireCounts[i] = fired + 1;
+          throw new ProviderError(failure.kind, `Injected failure: ${failure.kind}`, {
+            provider: this.id,
+            retryAfterMs: failure.retryAfterMs,
+            status: failure.status,
+          });
+        }
+      }
+    }
+
+    let chunksToYield: CanonicalChunk[];
+
+    if (this.customChunks !== undefined) {
+      chunksToYield = this.customChunks;
+    } else {
+      const id = newRequestId();
+      const model = req.model ?? this.model;
+      const created = Math.floor(now / 1000);
+
+      const promptTokens = countTokens(req.messages.map((m) => m.content ?? '').join(' '));
+      const completionTokens = countTokens(this.content);
+      const usage: Usage = {
+        prompt_tokens: this.usageOverride.prompt_tokens ?? promptTokens,
+        completion_tokens: this.usageOverride.completion_tokens ?? completionTokens,
+        total_tokens:
+          this.usageOverride.total_tokens ??
+          (this.usageOverride.prompt_tokens ?? promptTokens) +
+            (this.usageOverride.completion_tokens ?? completionTokens),
+        estimated: this.usageOverride.estimated ?? true,
+      };
+
+      const tokens = this.content.split(/(\s+)/).filter(Boolean);
+      if (tokens.length === 0) {
+        chunksToYield = [
+          {
+            id,
+            model,
+            created,
+            delta: { role: 'assistant', content: '' },
+            finish_reason: this.finishReason,
+            usage,
+          },
+        ];
+      } else {
+        chunksToYield = [];
+        for (let idx = 0; idx < tokens.length; idx++) {
+          const isFirst = idx === 0;
+          const isLast = idx === tokens.length - 1;
+          chunksToYield.push({
+            id,
+            model,
+            created,
+            delta: isFirst ? { role: 'assistant', content: tokens[idx] } : { content: tokens[idx] },
+            finish_reason: isLast ? this.finishReason : null,
+            ...(isLast ? { usage } : {}),
+          });
+        }
+      }
+    }
+
+    for (let i = 0; i < chunksToYield.length; i++) {
+      if (signal?.aborted) {
+        throw new ProviderError('timeout', 'Request aborted by caller', {
+          provider: this.id,
+          status: 504,
+        });
+      }
+
+      if (i > 0 && this.chunkDelayMs > 0) {
+        await this.sleep(this.chunkDelayMs);
+      }
+
+      if (signal?.aborted) {
+        throw new ProviderError('timeout', 'Request aborted by caller', {
+          provider: this.id,
+          status: 504,
+        });
+      }
+
+      // Check mid-stream failure injection (afterChunks === i)
+      for (let fIdx = 0; fIdx < this.failures.length; fIdx++) {
+        const failure = this.failures[fIdx];
+        if (!failure) continue;
+        if (failure.afterChunks !== i) continue;
+
+        const fired = this.failureFireCounts[fIdx] ?? 0;
+        const maxTimes = failure.times ?? 1;
+
+        if (fired < maxTimes) {
+          const shouldFire = failure.when === undefined || failure.when(currentCallIndex, cred);
+          if (shouldFire) {
+            this.failureFireCounts[fIdx] = fired + 1;
+            throw new ProviderError(failure.kind, `Injected mid-stream failure: ${failure.kind}`, {
+              provider: this.id,
+              retryAfterMs: failure.retryAfterMs,
+              status: failure.status,
+            });
+          }
+        }
+      }
+
+      yield chunksToYield[i]!;
+    }
   }
 }
 

@@ -183,18 +183,18 @@ test('http: 400 when temperature is the wrong type', async (t) => {
   assert.equal(body.error.type, 'invalid_request_error');
 });
 
-test('http: 501 when stream is true', async (t) => {
+test('http: stream: true returns SSE text/event-stream with 200', async (t) => {
   const app = makeApp();
   t.after(async () => {
     await app.close();
   });
 
   const res = await post(app, { ...validBody, stream: true });
-  assert.equal(res.statusCode, 501);
-
-  const body = res.json();
-  assertErrorEnvelope(body);
-  assert.equal(body.error.code, 'unsupported');
+  assert.equal(res.statusCode, 200);
+  assert.match(String(res.headers['content-type']), /text\/event-stream/);
+  // SSE body must contain at least one data line and [DONE]
+  assert.match(res.body, /data:/);
+  assert.match(res.body, /\[DONE\]/);
 });
 
 test('http: 501 when n is greater than 1', async (t) => {
@@ -254,7 +254,6 @@ test('http: every non-2xx returns the OpenAI error envelope', async (t) => {
     { body: validBody, headers: {}, status: 401 },
     { body: { model: 'mock-model' }, headers: authorized, status: 400 },
     { body: { ...validBody, temperature: 'hot' }, headers: authorized, status: 400 },
-    { body: { ...validBody, stream: true }, headers: authorized, status: 501 },
     { body: { ...validBody, tools: [] }, headers: authorized, status: 501 },
   ];
 

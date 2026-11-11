@@ -3,26 +3,52 @@ import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ProviderError } from '../../core/errors';
 import {
-  createExecutor,
-  execute,
   type AdapterMapEntry,
   type Candidate,
   type ExecuteMeta,
   type ExecuteOptions,
+  type ExecuteStreamOptions,
 } from '../../core/execute';
-import type { CanonicalRequest, CanonicalResponse } from '../../core/types';
-import type { CredentialPool } from '../../credentials/pool';
-import { createLedger, type Ledger } from '../../limits/ledger';
+import type { CanonicalChunk, CanonicalRequest, CanonicalResponse } from '../../core/types';
 import { resolvePolicy, type LimitPolicy } from '../../limits/policy';
-import { createLedgerClient, type LedgerClient } from '../../limits/redis';
 import { createProviderRegistry, type ProviderRegistry } from '../../providers/registry';
 import type { ProviderAdapter } from '../../providers/types';
-import { type Breaker, type BreakerClient } from '../../resilience/breaker';
-import { createParking, type Parking } from '../../resilience/parking';
 import { createDefaultEvalTable, type EvalTable, type LruMap } from '../../routing/select';
 import { ApiError, headersForError, statusForError, toEnvelope } from '../errors';
 import { ChatRequest, ChatResponse } from '../schemas';
 import type { ServerDeps } from '../server';
+import { formatSseChunk, SSE_DONE, writeWithBackpressure } from '../sse';
+import { buildRouterRuntime, type ChatRouterDeps, type RouterRuntime } from './router-runtime';
+
+export type { ChatRouterDeps, RouterRuntime };
+
+/** Verify the admin token on protected endpoints. */
+function assertAuthorized(req: FastifyRequest, expected: string): void {
+  const header = req.headers.authorization;
+  const match = header === undefined ? null : /^Bearer\s+(.+)$/i.exec(header);
+  const token = match?.[1]?.trim();
+
+  if (token === undefined || token.length === 0) {
+    throw new ApiError('auth', 'missing bearer token');
+  }
+
+  if (!constantTimeEqual(token, expected)) {
+    throw new ApiError('auth', 'invalid gateway key');
+  }
+}
+
+function constantTimeEqual(left: string, right: string): boolean {
+  const a = Buffer.from(left, 'utf8');
+  const b = Buffer.from(right, 'utf8');
+
+  if (a.length !== b.length) {
+    // Keep the comparison cost independent of where the lengths differ.
+    timingSafeEqual(a, a);
+    return false;
+  }
+
+  return timingSafeEqual(a, b);
+}
 
 const UNSUPPORTED_FIELDS = [
   'logprobs',
@@ -46,24 +72,6 @@ const IGNORED_FIELDS = [
   'user',
 ] as const;
 
-/** Optional router wiring accepted alongside Phase A ServerDeps. */
-export interface ChatRouterDeps {
-  pool?: CredentialPool;
-  registry?: ProviderRegistry;
-  adapters?: ProviderAdapter[];
-  candidates?: ReadonlyArray<Candidate>;
-  policies?: Map<string, LimitPolicy>;
-  redisUrl?: string;
-  ledgerClient?: LedgerClient;
-  breakerClient?: BreakerClient;
-  ledger?: Ledger;
-  breaker?: Breaker;
-  parking?: Parking;
-  evalTable?: EvalTable;
-  lru?: LruMap;
-  maxAttempts?: number;
-}
-
 /**
  * The boundary rule, in one place.
  *
@@ -77,10 +85,6 @@ export function assertSupported(body: unknown, log?: (message: string) => void):
   }
 
   const raw = body as Record<string, unknown>;
-
-  if (raw.stream === true) {
-    throw new ApiError('unsupported', 'stream: true is not supported until Block 10');
-  }
 
   if (raw.n !== undefined && raw.n !== null) {
     const numeric = typeof raw.n === 'number' ? raw.n : Number(raw.n);
@@ -130,6 +134,7 @@ export function registerChatCompletions(
     },
     async (req, reply) => {
       const startedAt = now();
+      const isStream = req.body.stream === true;
       const canonical: CanonicalRequest = {
         model: req.body.model,
         messages: req.body.messages,
@@ -138,12 +143,140 @@ export function registerChatCompletions(
         max_tokens: req.body.max_tokens,
         stop: req.body.stop,
         response_format: req.body.response_format,
-        stream: false,
+        stream: isStream,
         user: req.body.user,
       };
 
       const candidates = buildCandidates(deps, registry, canonical);
       const policies = deps.policies ?? buildPolicies(candidates);
+
+      if (isStream) {
+        const clientController = new AbortController();
+        const onClientClose = () => {
+          if (!reply.raw.writableEnded) {
+            clientController.abort();
+          }
+        };
+        req.raw.on('close', onClientClose);
+        if (req.signal) {
+          req.signal.addEventListener('abort', () => clientController.abort(), { once: true });
+        }
+
+        let meta: ExecuteMeta | undefined;
+        const callOptions: ExecuteStreamOptions = {
+          maxAttempts: deps.maxAttempts,
+          totalDeadlineMs: deps.config.requestDeadlineMs,
+          attemptTimeoutMs: deps.config.attemptTimeoutMs,
+          evalTable,
+          lru,
+          parking: routerRuntime.parking,
+          clock: now,
+          signal: clientController.signal,
+          onFirstChunk: (completed) => {
+            meta = completed;
+          },
+          onComplete: (completed) => {
+            meta = completed;
+          },
+        };
+
+        const stream = routerRuntime.runStream(
+          canonical,
+          candidates,
+          policies,
+          adapterMap,
+          callOptions,
+        );
+
+        const iterator = stream[Symbol.asyncIterator]();
+        let firstItem: IteratorResult<CanonicalChunk>;
+
+        try {
+          firstItem = await iterator.next();
+        } catch (err) {
+          req.raw.off('close', onClientClose);
+          if (err instanceof ProviderError) {
+            const status = statusForError(err);
+            const headers = headersForError(err);
+            for (const [name, value] of Object.entries(headers)) {
+              reply.header(name, value);
+            }
+            if (err.kind === 'rate_limited' && headers['retry-after'] === undefined) {
+              reply.header('retry-after', '1');
+            }
+            const rawReply: FastifyReply = reply;
+            return rawReply.status(status).send(toEnvelope(err));
+          }
+          throw err;
+        }
+
+        const requestId = req.gatewayRequestId;
+        const providerId = meta?.providerId ?? deps.provider.id;
+        const model = meta?.modelId ?? canonical.model ?? providerId;
+        const attempts = meta?.attempts ?? 1;
+        const latencyMs = Math.max(0, now() - startedAt);
+
+        reply.hijack();
+
+        reply.raw.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+          'x-request-id': requestId,
+          'x-gateway-provider': providerId,
+          'x-gateway-model': model,
+          'x-gateway-attempts': String(attempts),
+          'x-gateway-latency-ms': String(latencyMs),
+        });
+
+        if (typeof reply.raw.flushHeaders === 'function') {
+          reply.raw.flushHeaders();
+        }
+
+        if (firstItem.done) {
+          reply.raw.write(SSE_DONE);
+          reply.raw.end();
+          req.raw.off('close', onClientClose);
+          return;
+        }
+
+        try {
+          await writeWithBackpressure(
+            reply.raw,
+            formatSseChunk(firstItem.value, requestId, model),
+            clientController.signal,
+          );
+
+          while (true) {
+            if (clientController.signal.aborted) break;
+            const nextItem = await iterator.next();
+            if (nextItem.done) break;
+            const ok = await writeWithBackpressure(
+              reply.raw,
+              formatSseChunk(nextItem.value, requestId, model),
+              clientController.signal,
+            );
+            if (!ok) break;
+          }
+
+          if (!reply.raw.writableEnded) {
+            await writeWithBackpressure(reply.raw, SSE_DONE, clientController.signal);
+            reply.raw.end();
+          }
+        } catch (err) {
+          if (!reply.raw.writableEnded) {
+            const providerErr =
+              err instanceof ProviderError
+                ? err
+                : new ProviderError('upstream', String(err), { status: 502, provider: providerId });
+            reply.raw.write(`event: error\ndata: ${JSON.stringify(toEnvelope(providerErr))}\n\n`);
+            reply.raw.end();
+          }
+        } finally {
+          req.raw.off('close', onClientClose);
+        }
+        return;
+      }
 
       let meta: ExecuteMeta | undefined;
       const callOptions: ExecuteOptions = {
@@ -279,113 +412,4 @@ function buildPolicies(candidates: ReadonlyArray<Candidate>): Map<string, LimitP
     }
   }
   return policies;
-}
-
-function buildRouterRuntime(
-  app: FastifyInstance,
-  deps: ServerDeps & ChatRouterDeps,
-  now: () => number,
-  lru: LruMap,
-  evalTable: EvalTable,
-): {
-  parking: Parking | undefined;
-  run: (
-    req: CanonicalRequest,
-    candidates: ReadonlyArray<Candidate>,
-    policies: Map<string, LimitPolicy>,
-    adapterMap: Map<string, AdapterMapEntry>,
-    options: ExecuteOptions,
-  ) => Promise<CanonicalResponse>;
-} {
-  let ownedRedisClient: LedgerClient | undefined;
-  let ledgerClient = deps.ledgerClient;
-  let breakerClient = deps.breakerClient;
-
-  if (deps.redisUrl !== undefined && (ledgerClient === undefined || breakerClient === undefined)) {
-    ownedRedisClient = createLedgerClient(deps.redisUrl);
-    ledgerClient ??= ownedRedisClient;
-    breakerClient ??= ownedRedisClient;
-    app.addHook('onClose', async () => {
-      ownedRedisClient?.disconnect();
-    });
-  }
-
-  if (deps.ledger !== undefined || deps.breaker !== undefined) {
-    const ledger = deps.ledger ?? createLedger(noopClient());
-    const breaker = deps.breaker ?? passThroughBreaker();
-    return {
-      parking: deps.parking,
-      run: (req, candidates, policies, adapterMap, options) =>
-        execute(req, candidates, ledger, policies, adapterMap, breaker, options),
-    };
-  }
-
-  if (ledgerClient !== undefined && breakerClient !== undefined) {
-    const executor = createExecutor(ledgerClient, breakerClient, {
-      totalDeadlineMs: deps.config.requestDeadlineMs,
-      attemptTimeoutMs: deps.config.attemptTimeoutMs,
-      evalTable,
-      lru,
-      clock: now,
-    });
-    const parking = deps.parking ?? createParking(ledgerClient);
-    return {
-      parking,
-      run: (req, candidates, policies, adapterMap, options) =>
-        executor.execute(req, candidates, policies, adapterMap, options),
-    };
-  }
-
-  // Hermetic Phase A fallback when no Redis client is wired (e.g. unit http.test.ts).
-  const ledger = createLedger(noopClient());
-  const breaker = passThroughBreaker();
-  return {
-    parking: deps.parking,
-    run: (req, candidates, policies, adapterMap, options) =>
-      execute(req, candidates, ledger, policies, adapterMap, breaker, options),
-  };
-}
-
-function noopClient(): LedgerClient {
-  return {
-    defineCommand() {
-      throw new Error('chat-completions: Redis LedgerClient is required for enforced limits');
-    },
-    disconnect() {},
-  };
-}
-
-function passThroughBreaker(): Breaker {
-  return {
-    allow: async () => ({ allowed: true }),
-    recordSuccess: async () => {},
-    recordFailure: async () => {},
-  };
-}
-
-function assertAuthorized(req: FastifyRequest, expected: string): void {
-  const header = req.headers.authorization;
-  const match = header === undefined ? null : /^Bearer\s+(.+)$/i.exec(header);
-  const token = match?.[1]?.trim();
-
-  if (token === undefined || token.length === 0) {
-    throw new ApiError('auth', 'missing bearer token');
-  }
-
-  if (!constantTimeEqual(token, expected)) {
-    throw new ApiError('auth', 'invalid gateway key');
-  }
-}
-
-function constantTimeEqual(left: string, right: string): boolean {
-  const a = Buffer.from(left, 'utf8');
-  const b = Buffer.from(right, 'utf8');
-
-  if (a.length !== b.length) {
-    // Keep the comparison cost independent of where the lengths differ.
-    timingSafeEqual(a, a);
-    return false;
-  }
-
-  return timingSafeEqual(a, b);
 }

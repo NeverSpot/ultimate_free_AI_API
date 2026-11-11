@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { MockProviderAdapter, type MockFailure } from '../../src/providers/mock';
 import type { Credential } from '../../src/providers/types';
+import type { CanonicalChunk } from '../../src/core/types';
 import { ProviderError } from '../../src/core/errors';
 
 const NOW = 1_731_250_000_000;
@@ -233,8 +234,24 @@ test('mock adapter: listModels returns at least one model flagged is_free', asyn
   assert.ok(models.some((m) => m.is_free === true));
 });
 
-test('mock adapter: stream() rejects with kind unsupported', async () => {
-  const adapter = new MockProviderAdapter({ clock: () => NOW });
+test('mock adapter: stream() yields chunks and terminates with finish_reason', async () => {
+  const adapter = new MockProviderAdapter({ clock: () => NOW, content: 'Hello world' });
+  const cred = makeCredential('cred-1');
+  const req = makeReq();
+
+  const chunks: CanonicalChunk[] = [];
+  for await (const chunk of adapter.stream(req, cred)) {
+    chunks.push(chunk);
+  }
+
+  assert.ok(chunks.length > 0, 'should yield at least one chunk');
+  const lastChunk = chunks[chunks.length - 1]!;
+  assert.ok(lastChunk.finish_reason !== null, 'last chunk should have a finish_reason');
+  assert.ok(lastChunk.usage !== undefined, 'last chunk should carry usage');
+});
+
+test('mock adapter: stream() with supportsStreaming: false rejects with kind unsupported', async () => {
+  const adapter = new MockProviderAdapter({ clock: () => NOW, supportsStreaming: false });
   const cred = makeCredential('cred-1');
   const req = makeReq();
 
@@ -246,7 +263,6 @@ test('mock adapter: stream() rejects with kind unsupported', async () => {
   } catch (err) {
     assert.ok(err instanceof ProviderError);
     assert.equal(err.kind, 'unsupported');
-    assert.match(err.message, /streaming lands in Block 10/);
   }
 });
 
