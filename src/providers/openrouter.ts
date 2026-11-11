@@ -7,13 +7,11 @@ import type {
   Usage,
 } from '../core/types';
 import type { Credential, ModelInfo, ProviderAdapter, ProviderId } from './types';
-import { ProviderError, type ErrorKind } from '../core/errors';
+import { ProviderError } from '../core/errors';
+import { ERROR_PROFILES, classifyStatus, parseErrorBody } from '../resilience/classify';
 
 /** The one OpenRouter endpoint. OpenAI-compatible. */
 const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
-
-/** Live OpenRouter ids are `400`s with this message, never `404`s. */
-const INVALID_MODEL_ID_PATTERN = /is not a valid model ID/i;
 
 interface OpenRouterChatCompletionRequest {
   model: string;
@@ -60,14 +58,6 @@ interface OpenRouterModelListResponse {
     context_length?: number | null;
     pricing?: Record<string, unknown>;
   }>;
-}
-
-interface OpenRouterErrorResponse {
-  error?: {
-    message?: string;
-    /** OpenRouter sends a number here, unlike OpenAI's string codes. */
-    code?: number | string;
-  };
 }
 
 /** Coerces a live pricing value (string or number) to a number, or `null` if unparseable. */
@@ -169,63 +159,6 @@ export class OpenRouterAdapter implements ProviderAdapter {
     }
   }
 
-  private parseRetryAfterMs(headers?: Headers): number | undefined {
-    const retryAfter = headers?.get('Retry-After');
-    if (!retryAfter) {
-      return undefined;
-    }
-
-    const seconds = Number.parseInt(retryAfter, 10);
-    if (!Number.isNaN(seconds)) {
-      return Math.max(seconds, 0) * 1000;
-    }
-
-    const date = Date.parse(retryAfter);
-    if (!Number.isNaN(date)) {
-      return Math.max(date - Date.now(), 0);
-    }
-
-    return undefined;
-  }
-
-  private mapError(
-    status: number,
-    body: OpenRouterErrorResponse,
-    headers?: Headers,
-  ): ProviderError {
-    const upstreamMessage = body.error?.message;
-    let kind: ErrorKind;
-
-    switch (status) {
-      case 400:
-        // Live OpenRouter reports unknown model ids as 400, not 404.
-        kind =
-          upstreamMessage !== undefined && INVALID_MODEL_ID_PATTERN.test(upstreamMessage)
-            ? 'model_gone'
-            : 'client';
-        break;
-      case 401:
-      case 402:
-        // 402 is per-credential funding state: retrying the same key never succeeds.
-        kind = 'auth';
-        break;
-      case 404:
-        kind = 'model_gone';
-        break;
-      case 429:
-        kind = 'rate_limited';
-        break;
-      default:
-        kind = 'upstream';
-    }
-
-    return new ProviderError(kind, upstreamMessage ?? `HTTP ${status}`, {
-      status,
-      provider: this.id,
-      retryAfterMs: this.parseRetryAfterMs(headers),
-    });
-  }
-
   private async send(url: string, init: RequestInit): Promise<Response> {
     try {
       return await this.fetchImpl(url, init);
@@ -263,24 +196,25 @@ export class OpenRouterAdapter implements ProviderAdapter {
       signal,
     });
 
-    let responseBody: OpenRouterChatCompletionResponse | OpenRouterErrorResponse;
-    try {
-      responseBody = (await response.json()) as
-        OpenRouterChatCompletionResponse | OpenRouterErrorResponse;
-    } catch {
-      // Non-JSON body: classify by status, never leak the raw payload.
-      throw this.mapError(response.status, {}, response.headers);
-    }
+    const text = await response.text();
+    const parsed = parseErrorBody(response.status, text);
 
     if (!response.ok) {
-      throw this.mapError(
-        response.status,
-        responseBody as OpenRouterErrorResponse,
-        response.headers,
-      );
+      throw classifyStatus(response.status, parsed, response.headers, {
+        provider: this.id,
+        profile: ERROR_PROFILES[this.id],
+      });
     }
 
-    const data = responseBody as OpenRouterChatCompletionResponse;
+    let data: OpenRouterChatCompletionResponse;
+    try {
+      data = JSON.parse(text) as OpenRouterChatCompletionResponse;
+    } catch {
+      throw new ProviderError('upstream', 'Invalid JSON response from provider', {
+        status: response.status,
+        provider: this.id,
+      });
+    }
 
     const choice = data.choices[0];
     if (!choice) {
@@ -343,17 +277,17 @@ export class OpenRouterAdapter implements ProviderAdapter {
       },
     });
 
+    const text = await response.text();
+    const parsed = parseErrorBody(response.status, text);
+
     if (!response.ok) {
-      let errorBody: OpenRouterErrorResponse;
-      try {
-        errorBody = (await response.json()) as OpenRouterErrorResponse;
-      } catch {
-        throw this.mapError(response.status, {}, response.headers);
-      }
-      throw this.mapError(response.status, errorBody, response.headers);
+      throw classifyStatus(response.status, parsed, response.headers, {
+        provider: this.id,
+        profile: ERROR_PROFILES[this.id],
+      });
     }
 
-    const data = (await response.json()) as OpenRouterModelListResponse;
+    const data = JSON.parse(text) as OpenRouterModelListResponse;
 
     return data.data.map((model) => ({
       id: model.id,

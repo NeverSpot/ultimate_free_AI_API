@@ -7,7 +7,8 @@ import type {
   Usage,
 } from '../core/types';
 import type { Credential, ModelInfo, ProviderAdapter, ProviderId } from './types';
-import { ProviderError, type ErrorKind } from '../core/errors';
+import { ProviderError } from '../core/errors';
+import { ERROR_PROFILES, classifyStatus, parseErrorBody } from '../resilience/classify';
 
 const DEFAULT_BASE_URL = 'https://integrate.api.nvidia.com/v1';
 
@@ -58,21 +59,6 @@ interface NvidiaModelListResponse {
   }>;
 }
 
-interface NvidiaErrorResponse {
-  status?: number;
-  title?: string;
-  detail?: string;
-  message?: string;
-  type?: string;
-  code?: number | string;
-  error?: {
-    message: string;
-    type: string;
-    param: string | null;
-    code: string;
-  };
-}
-
 /** NVIDIA NIM provider adapter (OpenAI-compatible). */
 export class NvidiaNimAdapter implements ProviderAdapter {
   readonly id: ProviderId = 'nvidia';
@@ -118,58 +104,6 @@ export class NvidiaNimAdapter implements ProviderAdapter {
     }
   }
 
-  private mapError(status: number, body: NvidiaErrorResponse, headers?: Headers): ProviderError {
-    let kind: ErrorKind;
-    let message: string;
-    let retryAfterMs: number | undefined;
-
-    // Extract Retry-After header if present
-    if (headers) {
-      const retryAfter = headers.get('Retry-After');
-      if (retryAfter) {
-        const seconds = parseInt(retryAfter, 10);
-        if (!Number.isNaN(seconds)) {
-          retryAfterMs = seconds * 1000;
-        }
-      }
-    }
-
-    switch (status) {
-      case 400:
-        kind = 'client';
-        message = body.error?.message ?? body.message ?? body.detail ?? 'Bad request';
-        break;
-      case 401:
-        kind = 'auth';
-        message = body.error?.message ?? body.detail ?? body.title ?? 'Unauthorized';
-        break;
-      case 404:
-        kind = 'model_gone';
-        message = body.error?.message ?? body.detail ?? 'Model not found';
-        break;
-      case 429:
-        kind = 'rate_limited';
-        message = body.error?.message ?? body.detail ?? 'Rate limited';
-        break;
-      case 500:
-      case 502:
-      case 503:
-      case 504:
-        kind = 'upstream';
-        message = body.error?.message ?? body.detail ?? 'Upstream error';
-        break;
-      default:
-        kind = 'upstream';
-        message = body.error?.message ?? body.detail ?? `HTTP ${status}`;
-    }
-
-    return new ProviderError(kind, message, {
-      status,
-      provider: this.id,
-      retryAfterMs,
-    });
-  }
-
   async chat(
     req: CanonicalRequest,
     cred: Credential,
@@ -193,25 +127,25 @@ export class NvidiaNimAdapter implements ProviderAdapter {
       signal,
     });
 
-    let responseBody: NvidiaChatCompletionResponse | NvidiaErrorResponse;
+    const text = await response.text();
+    const parsed = parseErrorBody(response.status, text);
+
+    if (!response.ok) {
+      throw classifyStatus(response.status, parsed, response.headers, {
+        provider: this.id,
+        profile: ERROR_PROFILES[this.id],
+      });
+    }
+
+    let data: NvidiaChatCompletionResponse;
     try {
-      responseBody = (await response.json()) as NvidiaChatCompletionResponse | NvidiaErrorResponse;
+      data = JSON.parse(text) as NvidiaChatCompletionResponse;
     } catch {
-      // If JSON parsing fails, check if it's a 404 (plain text "404 page not found")
-      if (response.status === 404) {
-        throw this.mapError(404, {}, response.headers);
-      }
       throw new ProviderError('upstream', 'Invalid JSON response from provider', {
         status: response.status,
         provider: this.id,
       });
     }
-
-    if (!response.ok) {
-      throw this.mapError(response.status, responseBody as NvidiaErrorResponse, response.headers);
-    }
-
-    const data = responseBody as NvidiaChatCompletionResponse;
 
     const choice = data.choices[0];
     if (!choice) {
@@ -273,20 +207,17 @@ export class NvidiaNimAdapter implements ProviderAdapter {
       },
     });
 
+    const text = await response.text();
+    const parsed = parseErrorBody(response.status, text);
+
     if (!response.ok) {
-      let errorBody: NvidiaErrorResponse;
-      try {
-        errorBody = (await response.json()) as NvidiaErrorResponse;
-      } catch {
-        throw new ProviderError('upstream', 'Failed to list models', {
-          status: response.status,
-          provider: this.id,
-        });
-      }
-      throw this.mapError(response.status, errorBody, response.headers);
+      throw classifyStatus(response.status, parsed, response.headers, {
+        provider: this.id,
+        profile: ERROR_PROFILES[this.id],
+      });
     }
 
-    const data = (await response.json()) as NvidiaModelListResponse;
+    const data = JSON.parse(text) as NvidiaModelListResponse;
 
     return data.data.map((model) => ({
       id: model.id,

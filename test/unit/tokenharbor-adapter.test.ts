@@ -253,8 +253,30 @@ describe('tokenharbor adapter', () => {
     }
   });
 
-  test('tokenharbor adapter: 429 maps to rate_limited with retryAfterMs from Retry-After', async () => {
+  test('tokenharbor adapter: free-allowance 429 maps to exhausted and ignores the misleading Retry-After', async () => {
     const errorBody = { error: { type: 'free_tier_limit_reached' } };
+    fetchMock = async () =>
+      new Response(JSON.stringify(errorBody), {
+        status: 429,
+        headers: { 'Retry-After': '3600' },
+      });
+    adapter = new TokenHarborAdapter({ baseUrl: BASE_URL, fetchImpl: fetchMock });
+
+    try {
+      await adapter.chat(makeReq({ model: 'deepseek-v4.1-flash:free' }), makeCredential());
+      assert.fail('Expected ProviderError');
+    } catch (err) {
+      assert.ok(err instanceof ProviderError);
+      assert.equal(err.kind, 'exhausted');
+      assert.equal(err.status, 429);
+      assert.equal(err.retryAfterMs, undefined);
+    }
+  });
+
+  test('tokenharbor adapter: ordinary 429 maps to rate_limited with retryAfterMs from Retry-After', async () => {
+    const errorBody = {
+      error: { message: 'Rate limit exceeded', type: 'rate_limit_exceeded' },
+    };
     fetchMock = async () =>
       new Response(JSON.stringify(errorBody), {
         status: 429,

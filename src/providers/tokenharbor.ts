@@ -7,7 +7,8 @@ import type {
   Usage,
 } from '../core/types';
 import type { Credential, ModelInfo, ProviderAdapter, ProviderId } from './types';
-import { ProviderError, type ErrorKind } from '../core/errors';
+import { ProviderError } from '../core/errors';
+import { ERROR_PROFILES, classifyStatus, parseErrorBody } from '../resilience/classify';
 
 /** The one Token Harbor endpoint. OpenAI-compatible. */
 const DEFAULT_BASE_URL = 'https://tokenharbor.ai/v1';
@@ -62,14 +63,6 @@ interface TokenHarborModelListResponse {
   }>;
 }
 
-interface TokenHarborErrorResponse {
-  error?: {
-    message?: string;
-    type?: string;
-    code?: string;
-  };
-}
-
 /** Token Harbor provider adapter (OpenAI-compatible). */
 export class TokenHarborAdapter implements ProviderAdapter {
   readonly id: ProviderId = 'tokenharbor';
@@ -115,56 +108,6 @@ export class TokenHarborAdapter implements ProviderAdapter {
     }
   }
 
-  private mapError(
-    status: number,
-    body: TokenHarborErrorResponse,
-    headers?: Headers,
-  ): ProviderError {
-    let kind: ErrorKind;
-    let message: string;
-    let retryAfterMs: number | undefined;
-
-    if (headers) {
-      const retryAfter = headers.get('Retry-After');
-      if (retryAfter) {
-        const seconds = parseInt(retryAfter, 10);
-        if (!Number.isNaN(seconds)) {
-          retryAfterMs = seconds * 1000;
-        }
-      }
-    }
-
-    switch (status) {
-      case 400:
-        kind = 'client';
-        message = body.error?.message ?? `HTTP ${status}`;
-        break;
-      case 401:
-      case 403:
-        kind = 'auth';
-        message = body.error?.message ?? `HTTP ${status}`;
-        break;
-      case 404:
-        kind = 'model_gone';
-        message = body.error?.message ?? `HTTP ${status}`;
-        break;
-      case 429:
-        kind = 'rate_limited';
-        message = body.error?.message ?? `HTTP ${status}`;
-        break;
-      default:
-        kind = 'upstream';
-        // 5xx and anything else: only a real provider message beats the status line.
-        message = status >= 500 ? (body.error?.message ?? `HTTP ${status}`) : `HTTP ${status}`;
-    }
-
-    return new ProviderError(kind, message, {
-      status,
-      provider: this.id,
-      retryAfterMs,
-    });
-  }
-
   async chat(
     req: CanonicalRequest,
     cred: Credential,
@@ -188,24 +131,25 @@ export class TokenHarborAdapter implements ProviderAdapter {
       signal,
     });
 
-    let responseBody: TokenHarborChatCompletionResponse | TokenHarborErrorResponse;
-    try {
-      responseBody = (await response.json()) as
-        TokenHarborChatCompletionResponse | TokenHarborErrorResponse;
-    } catch {
-      // Non-JSON body: classify by status, never leak the raw payload.
-      throw this.mapError(response.status, {}, response.headers);
-    }
+    const text = await response.text();
+    const parsed = parseErrorBody(response.status, text);
 
     if (!response.ok) {
-      throw this.mapError(
-        response.status,
-        responseBody as TokenHarborErrorResponse,
-        response.headers,
-      );
+      throw classifyStatus(response.status, parsed, response.headers, {
+        provider: this.id,
+        profile: ERROR_PROFILES[this.id],
+      });
     }
 
-    const data = responseBody as TokenHarborChatCompletionResponse;
+    let data: TokenHarborChatCompletionResponse;
+    try {
+      data = JSON.parse(text) as TokenHarborChatCompletionResponse;
+    } catch {
+      throw new ProviderError('upstream', 'Invalid JSON response from provider', {
+        status: response.status,
+        provider: this.id,
+      });
+    }
 
     const choice = data.choices[0];
     if (!choice) {
@@ -267,17 +211,17 @@ export class TokenHarborAdapter implements ProviderAdapter {
       },
     });
 
+    const text = await response.text();
+    const parsed = parseErrorBody(response.status, text);
+
     if (!response.ok) {
-      let errorBody: TokenHarborErrorResponse;
-      try {
-        errorBody = (await response.json()) as TokenHarborErrorResponse;
-      } catch {
-        throw this.mapError(response.status, {}, response.headers);
-      }
-      throw this.mapError(response.status, errorBody, response.headers);
+      throw classifyStatus(response.status, parsed, response.headers, {
+        provider: this.id,
+        profile: ERROR_PROFILES[this.id],
+      });
     }
 
-    const data = (await response.json()) as TokenHarborModelListResponse;
+    const data = JSON.parse(text) as TokenHarborModelListResponse;
 
     return data.data.map((model) => ({
       id: model.id,
