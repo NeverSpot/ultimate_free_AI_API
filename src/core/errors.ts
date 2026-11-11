@@ -37,11 +37,18 @@ export class ProviderError extends Error {
   readonly provider?: string;
 
   constructor(kind: ErrorKind, message: string, options: ProviderErrorOptions = {}) {
-    super(message, options.cause === undefined ? undefined : { cause: options.cause });
+    super(message);
     this.name = 'ProviderError';
     this.kind = kind;
     this.status = options.status;
     this.retryAfterMs = options.retryAfterMs;
     this.provider = options.provider;
+    if (options.cause !== undefined) {
+      Object.defineProperty(this, 'cause', {
+        value: options.cause,
+        enumerable: false,
+        writable: true,
+      });
+    }
   }
 }
