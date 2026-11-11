@@ -2,9 +2,10 @@
 
 > Handoff file. Read first, rewrite last. Keep under 25 lines.
 
-- **Current block:** 9 — wire breaker + parking into the request path, router (delegated)
-- **Last green verify:** `npm run verify` -> exit 0, **206 hermetic tests** (+27 integration)
-- **Phase A: COMPLETE.**
+- **Current block:** 11 — Accounting + Postgres (telemetry store)
+- **Last green verify:** `npm run verify` -> exit 0, **233 hermetic tests** (+27 integration)
+- **Phase A (Aggregate): COMPLETE.** Blocks 1–10 merged to master at `7bdb247`.
+- **Phase B (Survive 429): COMPLETE.** Capacity gate passed (3 creds @ 30 RPM → 60 RPM, zero client 429s).
 
 ## Done
 
@@ -13,20 +14,19 @@
 - Block 8: circuit breaker per (provider, model) in Redis + credential parking per credential
   - OPEN breaker makes zero network calls (proven by fetch spy counter)
   - Dead key is not a dead provider
+- Block 9: capacity-aware select + failover ladder (pure `route()`, one `execute()` loop)
+- Block 10: SSE streaming for `/v1/chat/completions` (`src/http/sse.ts`, `router-runtime.ts`, streaming pipeline)
 
-## Running now: Block 9
+## Next
 
-- `src/routing/select.ts` — pure function: capacity -> task fit -> LRU spread -> quality
-- `src/core/execute.ts` — one loop: rank, reserve budget, call, classify, park/break/next
-- Wire into `src/http/routes/chat-completions.ts`
-- Hermetic tests for select/execute + live smoke re-run
+- Block 11 — Accounting + Postgres (one row per terminal path; success, failure, timeout, abort)
 
 ## Open items
 
-- Ledger ceilings still null — Block 7/8 must hydrate from registry or GET /auth/key
-- parkUntil has no channel through ProviderError; Block 9 calls rateLimitVerdict() directly
-- release() not rollover-safe; needs a reservation token
-- Capacity test gates Phase B (after Block 9)
+- Ledger ceilings still null — hydrate from registry or `GET /auth/key`
+- `parkUntil` has no channel through `ProviderError`; Block 9 calls `rateLimitVerdict()` directly
+- `release()` not rollover-safe; needs a reservation token
+- Pre-existing integration failure: `ledger: an exhausted rpw blocks even when rpm is clean` (test/integration/ledger.test.ts:119)
 
 ## Do not touch without a human
 
