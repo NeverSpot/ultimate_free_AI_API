@@ -2,23 +2,24 @@
 
 > Handoff file. Read first, rewrite last. Keep under 25 lines.
 
-- **Current block:** 8 — circuit breaker + credential parking (delegated)
-- **Last green verify:** `npm run verify` -> exit 0, **192 hermetic tests** (+13 integration)
-- **Phase A: COMPLETE.** Phase B: Blocks 6-7 done, 8 in flight.
+- **Current block:** 9 — wire breaker + parking into the request path (delegated)
+- **Last green verify:** `npm run verify` -> exit 0, **206 hermetic tests** (+27 integration)
+- **Phase A: COMPLETE.**
 
-## Done in Phase B
+## Done
 
-- Block 6 `167c08f` — multi-window ledger (rpm/rpd/rpw, one atomic Lua, max-wait + window tag)
-- Block 7 `cd3228e` — one shared error classifier; 429 split by verdict, not status:
-  ordinary throttle -> rate_limited, Token Harbor free allowance -> exhausted (503), and its
-  Retry-After of 3600 dropped as a ~170x lie against a 7-day reset
+- Block 6: multi-window ledger (rpm/rpd/rpw, atomic Lua, max-wait + window tag)
+- Block 7: shared error classifier; 429 split by verdict (rate_limited vs exhausted)
+- Block 8: circuit breaker per (provider, model) in Redis + credential parking per credential
+  - OPEN breaker makes zero network calls (proven by fetch spy counter)
+  - Dead key is not a dead provider
 
 ## Open items
 
-- Ledger ceilings still `null` — nothing refuses a real provider until 8/9 hydrate them
-- `parkUntil` has no channel through `ProviderError`; Block 9 must call `rateLimitVerdict()`
-- `release()` not rollover-safe (needs a reservation token at Block 9)
-- Capacity test now gates Phase B, after Block 9
+- Ledger ceilings still null — Block 7/8 must hydrate from registry or GET /auth/key
+- parkUntil has no channel through ProviderError; Block 9 calls rateLimitVerdict directly
+- release() not rollover-safe; needs a reservation token at Block 9
+- Capacity test gates Phase B (after Block 9)
 
 ## Do not touch without a human
 
