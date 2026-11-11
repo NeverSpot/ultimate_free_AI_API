@@ -5,10 +5,14 @@
 `node:test` via `tsx`. Zero test framework dependency.
 
 ```
-npm test                                  # everything under test/
+npm test                                  # everything (Node's default discovery)
 npm run test -- test/unit/x.test.ts       # one file
-npm run test -- --test-name-pattern "x"   # one test by name
+npm run test -- --test-name-pattern "x"   # one test by name  <- works because no glob is pinned
 npm run test:watch                        # watch mode
+
+# The `test` script deliberately does NOT pin a glob. Pinning `"test/**/*.test.ts"`
+# makes npm append `--test-name-pattern` AFTER the positional glob, where Node treats it
+# inconsistently — a filter would silently execute 41 of 92 tests. Let Node discover.
 ```
 
 Tests are hermetic: no network, no Docker, no real keys. Anything needing Postgres or

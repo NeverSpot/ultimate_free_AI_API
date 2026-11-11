@@ -89,6 +89,11 @@ No feature work begins until all four pass, and they re-run after every block.
 
 Test 4 is the one that proves the product exists.
 
+> **Gate placement, corrected 2026-11-11.** The Capacity test cannot pass in Phase A: it needs a
+> per-credential budget ledger and a selector, which are Blocks 6 and 9. Phase A's gate is
+> therefore the **Provider test only** (passed at Block 4). The Capacity test moves to the
+> **Phase B gate**, after Block 9 — it is unchanged in content, only in when it can run.
+
 ---
 
 ## 6. Build blocks
@@ -111,7 +116,7 @@ that exist today, so a command below becomes real when its block lands.
 |---|---|---|
 | 1 | Canonical schema + mock adapter | `npm run test -- --test-name-pattern "mock adapter"` |
 | 2 | HTTP buffered path | `npm run smoke` (HTTP 200 + `choices[0].message.content`) |
-| 3 | Adapters + credential pool | `npm run smoke -- --provider groq` (also `gemini`, `openrouter`) |
+| 3 | Adapters + credential pool | `npm run smoke -- --provider openrouter` (also `nvidia`, `tokenharbor`) |
 | 4 | Free-model discovery | `npm run registry:list` (table of free models per provider) |
 | 5 | Model registry table | `npm run db:migrate && npm run test:int -- --test-name-pattern "registry"` |
 | 6 | Rate-limit ledger | `npm run test -- --test-name-pattern "ledger race"` |
@@ -165,7 +170,7 @@ decision is what makes pooling possible later.
 
 - **Learn (2h):** each provider's OpenAI-compatible base URL, auth header, model-list endpoint, error body. **Spike:** `curl` all three with an identical body and write down every difference.
 - **Build:**
-  - `src/providers/{groq,gemini,openrouter}.ts`
+  - `src/providers/{nvidia-nim,openrouter,tokenharbor}.ts`
   - `src/credentials/pool.ts` — load N credentials per provider from env; `getCandidates(provider)` returns all of them.
   - `getCredential(id)` as the single read path.
 - **Done when:** two keys on the same provider both work through the endpoint, and the pool reports 2 available credentials.
@@ -348,11 +353,15 @@ decision is what makes pooling possible later.
 
 ## 7. Progress
 
+> Block 1 was pulled forward into Block 2: the canonical types, `ProviderAdapter` contract
+> and a deterministic mock landed with it. Still outstanding from Block 1: the mock's own
+> RPM ceiling and injectable 429/500/timeout, plus its dedicated test file.
+
 | # | Block | Learn | Built | Tested |
 |---|---|---|---|---|
 | 0 | Repo & toolchain | — | ✅ | ✅ |
-| 1 | Canonical schema + mock adapter | ☐ | ☐ | ☐ |
-| 2 | HTTP buffered path | ☐ | ☐ | ☐ |
+| 1 | Canonical schema + mock adapter | ✅ | ◐ | ☐ |
+| 2 | HTTP buffered path | ✅ | ✅ | ✅ |
 | 3 | Real adapters + credential pool | ☐ | ☐ | ☐ |
 | 4 | Free-model discovery | ☐ | ☐ | ☐ |
 | 5 | Model registry table | ☐ | ☐ | ☐ |
@@ -376,7 +385,7 @@ decision is what makes pooling possible later.
 src/
   core/         types.ts, select.ts, route.ts, execute.ts, ids.ts
   http/         server.ts, routes/, middleware/
-  providers/    types.ts, registry.ts, mock.ts, groq.ts, gemini.ts, openrouter.ts
+  providers/    types.ts, registry.ts, mock.ts, nvidia-nim.ts, openrouter.ts, tokenharbor.ts
   credentials/  pool.ts, vault.ts, store.ts
   limits/       ledger.ts, ledger.lua, window.ts
   routing/      store.ts, json-store.ts, eval-store.ts
@@ -433,9 +442,9 @@ directories — `AGENTS.md` carries the same map, and the two must stay in sync.
 PORT=8080
 DATABASE_URL=postgres://...
 REDIS_URL=redis://...
-GROQ_KEYS=key1,key2            # or a JSON map: provider -> [keys]
-GEMINI_KEYS=key1,key2
+NVIDIA_NIM_KEYS=key1,key2      # comma-separated; several keys per provider is the point
 OPENROUTER_KEYS=key1
+TOKENHARBOR_KEYS=key1,key2
 MASTER_ENCRYPTION_KEY=         # 32-byte hex, read by the vault
 ADMIN_TOKEN=
 LOG_LEVEL=info

@@ -49,7 +49,8 @@ The request lifecycle is ordered. Do not reorder it.
 ## Invariants — violating these is a bug even if tests pass
 
 1. Rate limits are discovered at runtime. Never hardcode an RPM / RPD / TPM number.
-2. Adding a provider = one new adapter file and zero edits elsewhere.
+2. Adding a provider = one new adapter file plus **one line** in `src/providers/defaults.ts`.
+   Nothing else changes: the registry and every CLI read that single composition root.
 3. Every terminal path (success, parked 429, open breaker, timeout, client abort) writes
    exactly one accounting row. Write it in `finally`.
 4. Breaker transitions are `CLOSED`/`OPEN`/`HALF_OPEN` only, stored in Redis, never in a
@@ -57,6 +58,29 @@ The request lifecycle is ordered. Do not reorder it.
 5. Streaming failover is allowed only **before the first token**.
 6. After `reply.hijack()` you own the response. Fastify must never write again — not even an
    error. Send Fastify errors **before** hijacking, or terminate the stream yourself.
+7. Never spread or clone a `Credential`. `secret` is a **non-enumerable** own property, so
+   `{ ...cred }`, `structuredClone` and JSON round-trips silently drop it — the adapter then
+   sends `Bearer undefined` and the failure looks like an auth problem. Access `cred.secret`
+   directly. `JSON.stringify(cred)` is safe because `toJSON()` returns `{id, provider, label}`.
+
+## Code intelligence
+
+This repo is indexed by **CodeGraph** (`.codegraph/`, auto-synced by a daemon, gitignored —
+never commit it). Prefer it over `grep` when the question is structural.
+
+| Question | Command |
+|---|---|
+| index stats | `codegraph status` |
+| find a symbol | `codegraph query <name>` |
+| one symbol's source + caller/callee trail | `codegraph node <name>` |
+| who calls this | `codegraph callers <name>` |
+| **what breaks if I change this** | `codegraph impact <name>` |
+| context for a task | `codegraph context "<task description>"` |
+
+**Always run `codegraph impact` before editing a shared interface.** Measured baseline:
+changing `ProviderAdapter` touches **92 symbols** across `types.ts`, all three adapters and
+their tests. That number is the practical meaning of the "adding a provider = one file"
+invariant — the interface is the expensive seam, so it must not churn.
 
 ## Where things live
 
@@ -66,7 +90,7 @@ The tree already exists — create files inside it, do not invent new directorie
 |---|---|
 | `src/core/` | `types.ts`, `select.ts`, `route.ts`, `execute.ts`, `ids.ts` |
 | `src/http/` | `server.ts`; `routes/`; `middleware/` |
-| `src/providers/` | `types.ts`, `registry.ts`, `mock.ts`, `groq.ts`, `gemini.ts`, `openrouter.ts` |
+| `src/providers/` | `types.ts`, `registry.ts`, `mock.ts`, `nvidia-nim.ts`, `openrouter.ts`, `tokenharbor.ts` |
 | `src/credentials/` | `pool.ts`, `vault.ts`, `store.ts` |
 | `src/limits/` | `ledger.ts`, `ledger.lua`, `window.ts` |
 | `src/routing/` | `store.ts`, `json-store.ts`, `eval-store.ts` |

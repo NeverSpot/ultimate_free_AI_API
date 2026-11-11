@@ -6,11 +6,16 @@
   "scripts": {
     "setup": "node scripts/setup.mjs",
     "dev": "node --watch --env-file-if-exists=.env --import tsx src/index.ts",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
     "start": "node --env-file-if-exists=.env dist/index.js",
+    "smoke": "node --env-file-if-exists=.env --import tsx scripts/smoke.ts",
+    "registry:list": "node --env-file-if-exists=.env --import tsx scripts/registry-list.ts",
+    "registry:sync": "node --env-file-if-exists=.env --import tsx scripts/registry-sync.ts",
+    "db:migrate": "node --env-file-if-exists=.env --import tsx src/db/migrate.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test \"test/**/*.test.ts\"",
-    "test:watch": "node --import tsx --test --watch \"test/**/*.test.ts\"",
+    "test": "node --import tsx --test",
+    "test:int": "node --import tsx --test test/integration/**/*.test.ts",
+    "test:watch": "node --import tsx --test --watch",
     "lint": "eslint . --cache --max-warnings=0",
     "lint:fix": "eslint . --cache --fix",
     "format": "prettier --write .",
@@ -23,6 +28,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.19.2",
+    "@types/pg": "^8.23.1",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.9.10",
@@ -35,5 +41,12 @@
     "node": ">=24.12.0 <25"
   },
   "packageManager": "npm@11.8.0",
-  "type": "commonjs"
+  "type": "commonjs",
+  "dependencies": {
+    "@fastify/type-provider-typebox": "^5.2.0",
+    "@sinclair/typebox": "^0.34.52",
+    "fastify": "^5.12.8",
+    "ioredis": "^5.11.1",
+    "pg": "^8.23.1"
+  }
 }

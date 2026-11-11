@@ -8,7 +8,8 @@ services:
       POSTGRES_PASSWORD: gateway
       POSTGRES_DB: gateway
     ports:
-      - '127.0.0.1:5432:5432'
+      # Host port 55432, not 5432: a native Windows Postgres service already owns 5432.
+      - '127.0.0.1:55432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
