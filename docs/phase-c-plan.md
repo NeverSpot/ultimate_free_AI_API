@@ -125,7 +125,7 @@ npm run test:int -- --test-name-pattern "idempotency"
 | 12 | `npm run eval` | pending |
 | 13 | `npm run test -- --test-name-pattern "policy"` | pending |
 | 14 | `npm run test:int -- --test-name-pattern "budget"` | pending |
-| 15 | `npm run test:int -- --test-name-pattern "idempotency"` | pending |
+| 15 | `npm run test:int -- --test-name-pattern "idempotency"` | passed |
 | **Gate** | `npm run test -- --test-name-pattern "policy"` (swap store) | pending |
 
 ---

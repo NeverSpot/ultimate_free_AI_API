@@ -15,6 +15,7 @@ import { createProviderRegistry, type ProviderRegistry } from '../../providers/r
 import type { ProviderAdapter } from '../../providers/types';
 import { createDefaultEvalTable, type EvalTable, type LruMap } from '../../routing/select';
 import { ApiError, headersForError, statusForError, toEnvelope } from '../errors';
+import { extractIdempotencyKey, replayResponse } from '../middleware/idempotency';
 import { ChatRequest, ChatResponse } from '../schemas';
 import type { ServerDeps } from '../server';
 import { formatSseChunk, SSE_DONE, writeWithBackpressure } from '../sse';
@@ -122,6 +123,7 @@ export function registerChatCompletions(
   const adapterMap = buildAdapterMap(registry, deps.provider);
 
   const routerRuntime = buildRouterRuntime(app, deps, now, lru, evalTable);
+  const idempotencyService = routerRuntime.idempotencyService;
 
   server.post(
     '/v1/chat/completions',
@@ -134,6 +136,21 @@ export function registerChatCompletions(
     },
     async (req, reply) => {
       const startedAt = now();
+      const idempotencyKey = extractIdempotencyKey(req.headers);
+      let idempotencyContext: { token: string; completed: boolean } | undefined;
+
+      if (idempotencyKey !== undefined && idempotencyService !== undefined) {
+        const decision = await idempotencyService.process(idempotencyKey, {
+          signal: req.raw.signal ?? req.signal,
+        });
+
+        if (decision.type === 'replay') {
+          return replayResponse(reply, decision.response);
+        }
+
+        idempotencyContext = { token: decision.lockToken, completed: false };
+      }
+
       const isStream = req.body.stream === true;
       const canonical: CanonicalRequest = {
         model: req.body.model,
@@ -195,6 +212,11 @@ export function registerChatCompletions(
           firstItem = await iterator.next();
         } catch (err) {
           req.raw.off('close', onClientClose);
+          if (idempotencyContext) {
+            await idempotencyService
+              .release(idempotencyKey!, idempotencyContext.token)
+              .catch(() => {});
+          }
           if (err instanceof ProviderError) {
             const status = statusForError(err);
             const headers = headersForError(err);
@@ -216,9 +238,7 @@ export function registerChatCompletions(
         const attempts = meta?.attempts ?? 1;
         const latencyMs = Math.max(0, now() - startedAt);
 
-        reply.hijack();
-
-        reply.raw.writeHead(200, {
+        const streamHeaders: Record<string, string> = {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           Connection: 'keep-alive',
@@ -227,41 +247,62 @@ export function registerChatCompletions(
           'x-gateway-model': model,
           'x-gateway-attempts': String(attempts),
           'x-gateway-latency-ms': String(latencyMs),
-        });
+        };
+
+        reply.hijack();
+        reply.raw.writeHead(200, streamHeaders);
 
         if (typeof reply.raw.flushHeaders === 'function') {
           reply.raw.flushHeaders();
         }
 
+        const recordedChunks: string[] = [];
+
         if (firstItem.done) {
+          recordedChunks.push(SSE_DONE);
           reply.raw.write(SSE_DONE);
           reply.raw.end();
           req.raw.off('close', onClientClose);
+          if (idempotencyContext) {
+            await idempotencyService.complete(idempotencyKey!, idempotencyContext.token, {
+              statusCode: 200,
+              headers: streamHeaders,
+              isStream: true,
+              chunks: recordedChunks,
+            });
+            idempotencyContext.completed = true;
+          }
           return;
         }
 
         try {
-          await writeWithBackpressure(
-            reply.raw,
-            formatSseChunk(firstItem.value, requestId, model),
-            clientController.signal,
-          );
+          const firstChunkStr = formatSseChunk(firstItem.value, requestId, model);
+          recordedChunks.push(firstChunkStr);
+          await writeWithBackpressure(reply.raw, firstChunkStr, clientController.signal);
 
           while (true) {
             if (clientController.signal.aborted) break;
             const nextItem = await iterator.next();
             if (nextItem.done) break;
-            const ok = await writeWithBackpressure(
-              reply.raw,
-              formatSseChunk(nextItem.value, requestId, model),
-              clientController.signal,
-            );
+            const chunkStr = formatSseChunk(nextItem.value, requestId, model);
+            recordedChunks.push(chunkStr);
+            const ok = await writeWithBackpressure(reply.raw, chunkStr, clientController.signal);
             if (!ok) break;
           }
 
           if (!reply.raw.writableEnded) {
+            recordedChunks.push(SSE_DONE);
             await writeWithBackpressure(reply.raw, SSE_DONE, clientController.signal);
             reply.raw.end();
+            if (idempotencyContext && !clientController.signal.aborted) {
+              await idempotencyService.complete(idempotencyKey!, idempotencyContext.token, {
+                statusCode: 200,
+                headers: streamHeaders,
+                isStream: true,
+                chunks: recordedChunks,
+              });
+              idempotencyContext.completed = true;
+            }
           }
         } catch (err) {
           if (!reply.raw.writableEnded) {
@@ -274,6 +315,11 @@ export function registerChatCompletions(
           }
         } finally {
           req.raw.off('close', onClientClose);
+          if (idempotencyContext && !idempotencyContext.completed) {
+            await idempotencyService
+              .release(idempotencyKey!, idempotencyContext.token)
+              .catch(() => {});
+          }
         }
         return;
       }
@@ -292,60 +338,91 @@ export function registerChatCompletions(
         },
       };
 
-      let response: CanonicalResponse;
       try {
-        response = await routerRuntime.run(
-          canonical,
-          candidates,
-          policies,
-          adapterMap,
-          callOptions,
-        );
-      } catch (err) {
-        if (err instanceof ProviderError) {
-          const status = statusForError(err);
-          const headers = headersForError(err);
-          for (const [name, value] of Object.entries(headers)) {
-            reply.header(name, value);
+        let response: CanonicalResponse;
+        try {
+          response = await routerRuntime.run(
+            canonical,
+            candidates,
+            policies,
+            adapterMap,
+            callOptions,
+          );
+        } catch (err) {
+          if (idempotencyContext) {
+            await idempotencyService
+              .release(idempotencyKey!, idempotencyContext.token)
+              .catch(() => {});
           }
-          if (err.kind === 'rate_limited' && headers['retry-after'] === undefined) {
-            reply.header('retry-after', '1');
+          if (err instanceof ProviderError) {
+            const status = statusForError(err);
+            const headers = headersForError(err);
+            for (const [name, value] of Object.entries(headers)) {
+              reply.header(name, value);
+            }
+            if (err.kind === 'rate_limited' && headers['retry-after'] === undefined) {
+              reply.header('retry-after', '1');
+            }
+            const rawReply: FastifyReply = reply;
+            return rawReply.status(status).send(toEnvelope(err));
           }
-          const rawReply: FastifyReply = reply;
-          return rawReply.status(status).send(toEnvelope(err));
+          throw err;
         }
-        throw err;
+
+        const requestId = req.gatewayRequestId;
+        const providerId = meta?.providerId ?? deps.provider.id;
+        const model = response.model || meta?.modelId || canonical.model || providerId;
+        const attempts = meta?.attempts ?? 1;
+        const latencyMs = Math.max(0, now() - startedAt);
+
+        const responseHeaders: Record<string, string> = {
+          'x-request-id': requestId,
+          'x-gateway-provider': providerId,
+          'x-gateway-model': model,
+          'x-gateway-attempts': String(attempts),
+          'x-gateway-latency-ms': String(latencyMs),
+          'x-gateway-tokens-estimated': response.usage.estimated ? 'true' : 'false',
+        };
+
+        for (const [name, value] of Object.entries(responseHeaders)) {
+          reply.header(name, value);
+        }
+
+        const responseBody = {
+          id: requestId,
+          object: 'chat.completion' as const,
+          created: response.created,
+          model,
+          choices: response.choices.map((choice) => ({
+            index: choice.index,
+            message: { role: 'assistant' as const, content: choice.message.content },
+            finish_reason: choice.finish_reason,
+          })),
+          usage: {
+            prompt_tokens: response.usage.prompt_tokens,
+            completion_tokens: response.usage.completion_tokens,
+            total_tokens: response.usage.total_tokens,
+          },
+        };
+
+        if (idempotencyContext) {
+          await idempotencyService.complete(idempotencyKey!, idempotencyContext.token, {
+            statusCode: 200,
+            headers: responseHeaders,
+            isStream: false,
+            body: responseBody,
+          });
+          idempotencyContext.completed = true;
+        }
+
+        return reply.send(responseBody);
+      } finally {
+        if (idempotencyContext && !idempotencyContext.completed) {
+          await idempotencyService
+            .release(idempotencyKey!, idempotencyContext.token)
+            .catch(() => {});
+        }
       }
-
-      const requestId = req.gatewayRequestId;
-      const providerId = meta?.providerId ?? deps.provider.id;
-      const model = response.model || meta?.modelId || canonical.model || providerId;
-      const attempts = meta?.attempts ?? 1;
-      const latencyMs = Math.max(0, now() - startedAt);
-
-      reply.header('x-request-id', requestId);
-      reply.header('x-gateway-provider', providerId);
-      reply.header('x-gateway-model', model);
-      reply.header('x-gateway-attempts', String(attempts));
-      reply.header('x-gateway-latency-ms', String(latencyMs));
-      reply.header('x-gateway-tokens-estimated', response.usage.estimated ? 'true' : 'false');
-
-      return reply.send({
-        id: requestId,
-        object: 'chat.completion',
-        created: response.created,
-        model,
-        choices: response.choices.map((choice) => ({
-          index: choice.index,
-          message: { role: 'assistant' as const, content: choice.message.content },
-          finish_reason: choice.finish_reason,
-        })),
-        usage: {
-          prompt_tokens: response.usage.prompt_tokens,
-          completion_tokens: response.usage.completion_tokens,
-          total_tokens: response.usage.total_tokens,
-        },
-      });
     },
   );
 }

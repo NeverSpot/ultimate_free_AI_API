@@ -3,6 +3,7 @@ import type { Config } from '../config/env';
 import { newRequestId } from '../core/ids';
 import type { Credential, ProviderAdapter } from '../providers/types';
 import { ApiError, envelopeOf, headersForError, statusForError, toEnvelope } from './errors';
+import type { IdempotencyService } from './middleware/idempotency';
 import { registerChatCompletions } from './routes/chat-completions';
 import { registerHealthz, type HealthProbes } from './routes/healthz';
 
@@ -16,6 +17,7 @@ export interface ServerDeps {
   logger?: boolean;
   /** Optional dependency probes for /healthz. Unwired probes report `unknown`. */
   probes?: HealthProbes;
+  idempotencyService?: IdempotencyService;
 }
 
 declare module 'fastify' {

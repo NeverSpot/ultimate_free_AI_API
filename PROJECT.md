@@ -374,7 +374,7 @@ decision is what makes pooling possible later.
 | 12 | Eval harness | ☐ | ☐ | ☐ |
 | 13 | `route()` + table store | ☐ | ☐ | ☐ |
 | 14 | User spend budget | ☐ | ☐ | ☐ |
-| 15 | Idempotency keys | ☐ | ☐ | ☐ |
+| 15 | Idempotency keys | ☑ | ☑ | ☑ |
 | 16 | Load test + metrics | ☐ | ☐ | ☐ |
 | 17 | Docker + Nginx deploy | ☐ | ☐ | ☐ |
 | 18 | Docs + demo | ☐ | ☐ | ☐ |

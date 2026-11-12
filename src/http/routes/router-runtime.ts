@@ -18,6 +18,12 @@ import type { ProviderAdapter } from '../../providers/types';
 import { type Breaker, type BreakerClient } from '../../resilience/breaker';
 import { createParking, type Parking } from '../../resilience/parking';
 import type { EvalTable, LruMap } from '../../routing/select';
+import {
+  createMemoryIdempotencyService,
+  createRedisIdempotencyService,
+  type IdempotencyClient,
+  type IdempotencyService,
+} from '../middleware/idempotency';
 import type { ServerDeps } from '../server';
 
 export interface ChatRouterDeps {
@@ -29,6 +35,8 @@ export interface ChatRouterDeps {
   redisUrl?: string;
   ledgerClient?: LedgerClient;
   breakerClient?: BreakerClient;
+  idempotencyService?: IdempotencyService;
+  idempotencyClient?: IdempotencyClient;
   ledger?: Ledger;
   breaker?: Breaker;
   parking?: Parking;
@@ -39,6 +47,7 @@ export interface ChatRouterDeps {
 
 export class RouterRuntime {
   readonly parking: Parking | undefined;
+  readonly idempotencyService: IdempotencyService;
   private readonly ledger: Ledger;
   private readonly breaker: Breaker;
   private readonly executor?: ReturnType<typeof createExecutor>;
@@ -48,11 +57,13 @@ export class RouterRuntime {
     ledger: Ledger;
     breaker: Breaker;
     executor?: ReturnType<typeof createExecutor>;
+    idempotencyService: IdempotencyService;
   }) {
     this.parking = deps.parking;
     this.ledger = deps.ledger;
     this.breaker = deps.breaker;
     this.executor = deps.executor;
+    this.idempotencyService = deps.idempotencyService;
   }
 
   async run(
@@ -103,6 +114,16 @@ export function buildRouterRuntime(
     });
   }
 
+  let idempotencyService = deps.idempotencyService;
+  if (idempotencyService === undefined) {
+    const redisClient = deps.idempotencyClient ?? ledgerClient;
+    if (redisClient !== undefined) {
+      idempotencyService = createRedisIdempotencyService(redisClient);
+    } else {
+      idempotencyService = createMemoryIdempotencyService({ clock: now });
+    }
+  }
+
   if (deps.ledger !== undefined || deps.breaker !== undefined) {
     const ledger = deps.ledger ?? createLedger(noopClient());
     const breaker = deps.breaker ?? passThroughBreaker();
@@ -110,6 +131,7 @@ export function buildRouterRuntime(
       parking: deps.parking,
       ledger,
       breaker,
+      idempotencyService,
     });
   }
 
@@ -129,6 +151,7 @@ export function buildRouterRuntime(
       ledger,
       breaker,
       executor,
+      idempotencyService,
     });
   }
 
@@ -139,6 +162,7 @@ export function buildRouterRuntime(
     parking: deps.parking,
     ledger,
     breaker,
+    idempotencyService,
   });
 }
 
