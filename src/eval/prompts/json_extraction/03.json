@@ -1,0 +1,31 @@
+{
+  "id": "json_03",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nInventory item: Product SKU-7890 (Wireless Mouse) costs 29.99 USD, is currently inStock (true), tagged under [\"electronics\", \"peripherals\"].\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"id\": \"SKU-7890\",\n  \"name\": \"Wireless Mouse\",\n  \"price\": 29.99,\n  \"inStock\": true,\n  \"categories\": [\n    \"electronics\",\n    \"peripherals\"\n  ]\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "price": {
+        "type": "number",
+        "minimum": 0
+      },
+      "inStock": {
+        "type": "boolean"
+      },
+      "categories": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": ["id", "name", "price", "inStock", "categories"]
+  }
+}

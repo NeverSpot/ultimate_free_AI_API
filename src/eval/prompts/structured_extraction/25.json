@@ -1,0 +1,12 @@
+{
+  "id": "struct_25",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: domain_name, registrar_company, registration_year, autorenewal_enabled.\n\nRecord:\nDomain registration record: example.org registered through NameCheap in 2020, auto renew: true.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"domain_name\": \"example.org\",\n  \"registrar_company\": \"NameCheap\",\n  \"registration_year\": 2020,\n  \"autorenewal_enabled\": true\n}",
+  "target": {
+    "domain_name": "example.org",
+    "registrar_company": "NameCheap",
+    "registration_year": 2020,
+    "autorenewal_enabled": true
+  }
+}

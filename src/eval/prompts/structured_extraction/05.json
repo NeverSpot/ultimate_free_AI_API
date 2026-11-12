@@ -1,0 +1,12 @@
+{
+  "id": "struct_05",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: property_address, bedrooms, bathrooms, listing_price.\n\nRecord:\nReal estate: 124 Ocean Drive features 4 bedrooms and 3 bathrooms, listed at $850000.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"property_address\": \"124 Ocean Drive\",\n  \"bedrooms\": 4,\n  \"bathrooms\": 3,\n  \"listing_price\": 850000\n}",
+  "target": {
+    "property_address": "124 Ocean Drive",
+    "bedrooms": 4,
+    "bathrooms": 3,
+    "listing_price": 850000
+  }
+}

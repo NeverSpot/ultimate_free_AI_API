@@ -1,0 +1,7 @@
+{
+  "id": "math_09",
+  "bucket": "math",
+  "prompt": "What is the least common multiple (LCM) of 14 and 35?\nOutput only the final numerical answer.",
+  "referenceAnswer": "70",
+  "expected": 70
+}

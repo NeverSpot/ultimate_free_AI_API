@@ -1,0 +1,24 @@
+{
+  "id": "json_13",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nServer node-web-01 at 192.168.1.50 has CPU usage of 42.8 percent and status \"healthy\".\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"hostname\": \"node-web-01\",\n  \"ipAddress\": \"192.168.1.50\",\n  \"cpuUsagePercent\": 42.8,\n  \"status\": \"healthy\"\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "hostname": {
+        "type": "string"
+      },
+      "ipAddress": {
+        "type": "string"
+      },
+      "cpuUsagePercent": {
+        "type": "number"
+      },
+      "status": {
+        "type": "string"
+      }
+    },
+    "required": ["hostname", "ipAddress", "cpuUsagePercent", "status"]
+  }
+}

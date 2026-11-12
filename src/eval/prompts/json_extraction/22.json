@@ -1,0 +1,24 @@
+{
+  "id": "json_22",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nCommit a1b2c3d by committer Jane Doe: \"fix(core): resolve race condition in pool\", filesChanged: 4.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"hash\": \"a1b2c3d\",\n  \"author\": \"Jane Doe\",\n  \"message\": \"fix(core): resolve race condition in pool\",\n  \"filesChanged\": 4\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "hash": {
+        "type": "string"
+      },
+      "author": {
+        "type": "string"
+      },
+      "message": {
+        "type": "string"
+      },
+      "filesChanged": {
+        "type": "integer"
+      }
+    },
+    "required": ["hash", "author", "message", "filesChanged"]
+  }
+}

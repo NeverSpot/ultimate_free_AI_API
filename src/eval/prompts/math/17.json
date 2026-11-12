@@ -1,0 +1,7 @@
+{
+  "id": "math_17",
+  "bucket": "math",
+  "prompt": "What is the 12th term of the arithmetic progression 5, 9, 13, 17...?\nOutput only the final numerical answer.",
+  "referenceAnswer": "49",
+  "expected": 49
+}

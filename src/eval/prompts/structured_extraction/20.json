@@ -1,0 +1,12 @@
+{
+  "id": "struct_20",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: borrower_name, book_isbn, return_due_date, renewal_count.\n\nRecord:\nLibrary loan: Borrower Hermione Granger checked out ISBN 9780747532743 due 2026-09-20, renewals: 1.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"borrower_name\": \"Hermione Granger\",\n  \"book_isbn\": \"9780747532743\",\n  \"return_due_date\": \"2026-09-20\",\n  \"renewal_count\": 1\n}",
+  "target": {
+    "borrower_name": "Hermione Granger",
+    "book_isbn": "9780747532743",
+    "return_due_date": "2026-09-20",
+    "renewal_count": 1
+  }
+}

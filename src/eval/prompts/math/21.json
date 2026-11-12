@@ -1,0 +1,7 @@
+{
+  "id": "math_21",
+  "bucket": "math",
+  "prompt": "How many seconds are in 2.5 hours?\nOutput only the final numerical answer.",
+  "referenceAnswer": "9000",
+  "expected": 9000
+}

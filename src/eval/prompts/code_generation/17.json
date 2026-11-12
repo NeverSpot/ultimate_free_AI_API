@@ -1,0 +1,21 @@
+{
+  "id": "code_17",
+  "bucket": "code_generation",
+  "prompt": "Write a JavaScript function `isAnagram(s1, s2)` that returns true if s1 and s2 are anagrams (ignoring spaces and case).\nOutput only the JavaScript code without extra commentary.",
+  "referenceAnswer": "function isAnagram(s1, s2) { const clean = s => s.toLowerCase().replace(/\\s+/g, '').split('').sort().join(''); return clean(s1) === clean(s2); }",
+  "entrypoint": "isAnagram",
+  "testCases": [
+    {
+      "input": ["listen", "silent"],
+      "expected": true
+    },
+    {
+      "input": ["rail safety", "fairy tales"],
+      "expected": true
+    },
+    {
+      "input": ["hello", "world"],
+      "expected": false
+    }
+  ]
+}

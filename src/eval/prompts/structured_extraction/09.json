@@ -1,0 +1,12 @@
+{
+  "id": "struct_09",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: owner_full_name, vin, vehicle_make, model_year.\n\nRecord:\nVehicle title registration: Owner Tony Stark registered VIN 1HGCR2F83HA001290, Make Audi, Model Year 2024.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"owner_full_name\": \"Tony Stark\",\n  \"vin\": \"1HGCR2F83HA001290\",\n  \"vehicle_make\": \"Audi\",\n  \"model_year\": 2024\n}",
+  "target": {
+    "owner_full_name": "Tony Stark",
+    "vin": "1HGCR2F83HA001290",
+    "vehicle_make": "Audi",
+    "model_year": 2024
+  }
+}

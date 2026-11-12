@@ -1,0 +1,27 @@
+{
+  "id": "json_16",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nHotel reservation RES-5512 for guest David Kim, 3 nights in a \"Deluxe Suite\", total amount 750.00.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"reservationId\": \"RES-5512\",\n  \"guestName\": \"David Kim\",\n  \"nights\": 3,\n  \"roomType\": \"Deluxe Suite\",\n  \"totalPaid\": 750\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "reservationId": {
+        "type": "string"
+      },
+      "guestName": {
+        "type": "string"
+      },
+      "nights": {
+        "type": "integer"
+      },
+      "roomType": {
+        "type": "string"
+      },
+      "totalPaid": {
+        "type": "number"
+      }
+    },
+    "required": ["reservationId", "guestName", "nights", "roomType", "totalPaid"]
+  }
+}

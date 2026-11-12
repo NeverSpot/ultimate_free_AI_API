@@ -1,0 +1,7 @@
+{
+  "id": "math_18",
+  "bucket": "math",
+  "prompt": "What is the sum of all integers from 1 to 100?\nOutput only the final numerical answer.",
+  "referenceAnswer": "5050",
+  "expected": 5050
+}

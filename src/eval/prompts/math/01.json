@@ -1,0 +1,7 @@
+{
+  "id": "math_01",
+  "bucket": "math",
+  "prompt": "Compute 482 + 379 - 146.\nOutput only the final numerical answer.",
+  "referenceAnswer": "715",
+  "expected": 715
+}

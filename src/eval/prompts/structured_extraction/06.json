@@ -1,0 +1,12 @@
+{
+  "id": "struct_06",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: candidate_name, applied_role, total_experience_years, previous_employer.\n\nRecord:\nCandidate profile: Sarah Connor applied for DevOps Lead with 8 years of experience coming from Cyberdyne Systems.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"candidate_name\": \"Sarah Connor\",\n  \"applied_role\": \"DevOps Lead\",\n  \"total_experience_years\": 8,\n  \"previous_employer\": \"Cyberdyne Systems\"\n}",
+  "target": {
+    "candidate_name": "Sarah Connor",
+    "applied_role": "DevOps Lead",
+    "total_experience_years": 8,
+    "previous_employer": "Cyberdyne Systems"
+  }
+}

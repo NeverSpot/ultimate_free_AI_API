@@ -1,0 +1,27 @@
+{
+  "id": "json_18",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nAppointment: Patient PAT-330 with Dr. Sarah Smith (Cardiology) on 2026-12-05, confirmed: true.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"patientId\": \"PAT-330\",\n  \"doctorName\": \"Dr. Sarah Smith\",\n  \"specialty\": \"Cardiology\",\n  \"appointmentDate\": \"2026-12-05\",\n  \"confirmed\": true\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "patientId": {
+        "type": "string"
+      },
+      "doctorName": {
+        "type": "string"
+      },
+      "specialty": {
+        "type": "string"
+      },
+      "appointmentDate": {
+        "type": "string"
+      },
+      "confirmed": {
+        "type": "boolean"
+      }
+    },
+    "required": ["patientId", "doctorName", "specialty", "appointmentDate", "confirmed"]
+  }
+}

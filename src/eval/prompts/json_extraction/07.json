@@ -1,0 +1,27 @@
+{
+  "id": "json_07",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nRecipe: Classic Pancakes takes 20 minutes to prepare, serves 4 people, ingredients are [\"flour\", \"milk\", \"eggs\", \"sugar\"].\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"recipeName\": \"Classic Pancakes\",\n  \"prepTimeMinutes\": 20,\n  \"servings\": 4,\n  \"ingredients\": [\n    \"flour\",\n    \"milk\",\n    \"eggs\",\n    \"sugar\"\n  ]\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "recipeName": {
+        "type": "string"
+      },
+      "prepTimeMinutes": {
+        "type": "integer"
+      },
+      "servings": {
+        "type": "integer"
+      },
+      "ingredients": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": ["recipeName", "prepTimeMinutes", "servings", "ingredients"]
+  }
+}

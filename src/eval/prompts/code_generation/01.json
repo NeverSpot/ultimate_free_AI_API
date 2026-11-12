@@ -1,0 +1,21 @@
+{
+  "id": "code_01",
+  "bucket": "code_generation",
+  "prompt": "Write a JavaScript function `add(a, b)` that returns the sum of two numbers.\nOutput only the JavaScript code without extra commentary.",
+  "referenceAnswer": "function add(a, b) { return a + b; }",
+  "entrypoint": "add",
+  "testCases": [
+    {
+      "input": [1, 2],
+      "expected": 3
+    },
+    {
+      "input": [-5, 5],
+      "expected": 0
+    },
+    {
+      "input": [100, 250],
+      "expected": 350
+    }
+  ]
+}

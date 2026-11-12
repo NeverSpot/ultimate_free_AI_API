@@ -1,0 +1,27 @@
+{
+  "id": "json_10",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nEmployee: EMP-104 is Jordan Lee, Department: Engineering, Role: Senior Architect, Active: true.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"employeeId\": \"EMP-104\",\n  \"fullName\": \"Jordan Lee\",\n  \"department\": \"Engineering\",\n  \"role\": \"Senior Architect\",\n  \"active\": true\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "employeeId": {
+        "type": "string"
+      },
+      "fullName": {
+        "type": "string"
+      },
+      "department": {
+        "type": "string"
+      },
+      "role": {
+        "type": "string"
+      },
+      "active": {
+        "type": "boolean"
+      }
+    },
+    "required": ["employeeId", "fullName", "department", "role", "active"]
+  }
+}

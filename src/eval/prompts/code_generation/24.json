@@ -1,0 +1,17 @@
+{
+  "id": "code_24",
+  "bucket": "code_generation",
+  "prompt": "Write a JavaScript function `countOccurrences(arr, val)` that returns how many times val occurs in arr.\nOutput only the JavaScript code without extra commentary.",
+  "referenceAnswer": "function countOccurrences(arr, val) { return arr.filter(x => x === val).length; }",
+  "entrypoint": "countOccurrences",
+  "testCases": [
+    {
+      "input": [[1, 2, 3, 2, 2, 4], 2],
+      "expected": 3
+    },
+    {
+      "input": [["a", "b", "c"], "z"],
+      "expected": 0
+    }
+  ]
+}

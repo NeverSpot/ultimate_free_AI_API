@@ -1,0 +1,7 @@
+{
+  "id": "math_24",
+  "bucket": "math",
+  "prompt": "Compute (23^3) mod 7.\nOutput only the final numerical answer.",
+  "referenceAnswer": "1",
+  "expected": 1
+}

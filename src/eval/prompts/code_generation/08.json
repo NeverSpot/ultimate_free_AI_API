@@ -1,0 +1,21 @@
+{
+  "id": "code_08",
+  "bucket": "code_generation",
+  "prompt": "Write a JavaScript function `countVowels(str)` that returns the count of vowels (a, e, i, o, u case-insensitive) in the string.\nOutput only the JavaScript code without extra commentary.",
+  "referenceAnswer": "function countVowels(str) { const matches = str.match(/[aeiou]/gi); return matches ? matches.length : 0; }",
+  "entrypoint": "countVowels",
+  "testCases": [
+    {
+      "input": ["hello"],
+      "expected": 2
+    },
+    {
+      "input": ["AEIOU"],
+      "expected": 5
+    },
+    {
+      "input": ["rhythm"],
+      "expected": 0
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "id": "json_08",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nWeather: In Tokyo, current temperature is 18.5 Celsius, humidity is 65 percent, and conditions are \"Clear\".\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"location\": \"Tokyo\",\n  \"temperatureCelsius\": 18.5,\n  \"humidityPercent\": 65,\n  \"condition\": \"Clear\"\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "location": {
+        "type": "string"
+      },
+      "temperatureCelsius": {
+        "type": "number"
+      },
+      "humidityPercent": {
+        "type": "integer"
+      },
+      "condition": {
+        "type": "string"
+      }
+    },
+    "required": ["location", "temperatureCelsius", "humidityPercent", "condition"]
+  }
+}

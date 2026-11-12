@@ -1,0 +1,17 @@
+{
+  "id": "code_16",
+  "bucket": "code_generation",
+  "prompt": "Write a JavaScript function `truncateString(str, num)` that truncates str if its length exceeds num and appends '...'.\nOutput only the JavaScript code without extra commentary.",
+  "referenceAnswer": "function truncateString(str, num) { return str.length > num ? str.slice(0, num) + '...' : str; }",
+  "entrypoint": "truncateString",
+  "testCases": [
+    {
+      "input": ["Hello World", 5],
+      "expected": "Hello..."
+    },
+    {
+      "input": ["Short", 10],
+      "expected": "Short"
+    }
+  ]
+}

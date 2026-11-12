@@ -1,0 +1,12 @@
+{
+  "id": "struct_17",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: athlete, steps_logged, kilometers_covered, active_calories.\n\nRecord:\nDaily activity for Barry Allen: Logged 18500 steps across 14.2 km burning 920 calories.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"athlete\": \"Barry Allen\",\n  \"steps_logged\": 18500,\n  \"kilometers_covered\": 14.2,\n  \"active_calories\": 920\n}",
+  "target": {
+    "athlete": "Barry Allen",
+    "steps_logged": 18500,
+    "kilometers_covered": 14.2,
+    "active_calories": 920
+  }
+}

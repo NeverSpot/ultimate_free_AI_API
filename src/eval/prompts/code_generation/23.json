@@ -1,0 +1,21 @@
+{
+  "id": "code_23",
+  "bucket": "code_generation",
+  "prompt": "Write a JavaScript function `isValidEmail(email)` that checks if string has a non-empty user, @, non-empty domain, and dot in domain.\nOutput only the JavaScript code without extra commentary.",
+  "referenceAnswer": "function isValidEmail(email) { return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email); }",
+  "entrypoint": "isValidEmail",
+  "testCases": [
+    {
+      "input": ["test@example.com"],
+      "expected": true
+    },
+    {
+      "input": ["invalid-email"],
+      "expected": false
+    },
+    {
+      "input": ["user@domain"],
+      "expected": false
+    }
+  ]
+}

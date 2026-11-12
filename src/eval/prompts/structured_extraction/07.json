@@ -1,0 +1,12 @@
+{
+  "id": "struct_07",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: host_name, meeting_date, duration_minutes, agenda_topic.\n\nRecord:\nMeeting log: Host Alan Turing scheduled conference on 2026-08-10 lasting 45 minutes regarding Cryptanalysis.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"host_name\": \"Alan Turing\",\n  \"meeting_date\": \"2026-08-10\",\n  \"duration_minutes\": 45,\n  \"agenda_topic\": \"Cryptanalysis\"\n}",
+  "target": {
+    "host_name": "Alan Turing",
+    "meeting_date": "2026-08-10",
+    "duration_minutes": 45,
+    "agenda_topic": "Cryptanalysis"
+  }
+}

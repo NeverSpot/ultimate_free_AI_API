@@ -1,0 +1,26 @@
+{
+  "id": "json_20",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nReview by TechFan: Rating 5 stars, title \"Excellent device\", verifiedPurchase: true.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"reviewer\": \"TechFan\",\n  \"rating\": 5,\n  \"title\": \"Excellent device\",\n  \"verifiedPurchase\": true\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "reviewer": {
+        "type": "string"
+      },
+      "rating": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 5
+      },
+      "title": {
+        "type": "string"
+      },
+      "verifiedPurchase": {
+        "type": "boolean"
+      }
+    },
+    "required": ["reviewer", "rating", "title", "verifiedPurchase"]
+  }
+}

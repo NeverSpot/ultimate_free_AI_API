@@ -1,0 +1,24 @@
+{
+  "id": "json_25",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nSubscription: \"Team Plan\" costs 49.00 per month, supports up to 10 users and 200 GB storage.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"planName\": \"Team Plan\",\n  \"monthlyCost\": 49,\n  \"maxUsers\": 10,\n  \"storageGb\": 200\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "planName": {
+        "type": "string"
+      },
+      "monthlyCost": {
+        "type": "number"
+      },
+      "maxUsers": {
+        "type": "integer"
+      },
+      "storageGb": {
+        "type": "integer"
+      }
+    },
+    "required": ["planName", "monthlyCost", "maxUsers", "storageGb"]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "id": "json_23",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nPodcast episode: \"The Changelog\", episodeNumber 550, hosted by Adam Stacoviak, runtime 65 minutes.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"showName\": \"The Changelog\",\n  \"episodeNumber\": 550,\n  \"host\": \"Adam Stacoviak\",\n  \"minutes\": 65\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "showName": {
+        "type": "string"
+      },
+      "episodeNumber": {
+        "type": "integer"
+      },
+      "host": {
+        "type": "string"
+      },
+      "minutes": {
+        "type": "integer"
+      }
+    },
+    "required": ["showName", "episodeNumber", "host", "minutes"]
+  }
+}

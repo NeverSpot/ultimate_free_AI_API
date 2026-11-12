@@ -1,0 +1,7 @@
+{
+  "id": "math_02",
+  "bucket": "math",
+  "prompt": "What is 34 * 28?\nOutput only the final numerical answer.",
+  "referenceAnswer": "952",
+  "expected": 952
+}

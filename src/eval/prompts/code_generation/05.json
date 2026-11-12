@@ -1,0 +1,21 @@
+{
+  "id": "code_05",
+  "bucket": "code_generation",
+  "prompt": "Write a JavaScript function `findMax(arr)` that returns the maximum number in a non-empty array.\nOutput only the JavaScript code without extra commentary.",
+  "referenceAnswer": "function findMax(arr) { return Math.max(...arr); }",
+  "entrypoint": "findMax",
+  "testCases": [
+    {
+      "input": [[1, 5, 3, 9, 2]],
+      "expected": 9
+    },
+    {
+      "input": [[-10, -5, -20]],
+      "expected": -5
+    },
+    {
+      "input": [[42]],
+      "expected": 42
+    }
+  ]
+}

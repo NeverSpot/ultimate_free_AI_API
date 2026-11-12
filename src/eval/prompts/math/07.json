@@ -1,0 +1,7 @@
+{
+  "id": "math_07",
+  "bucket": "math",
+  "prompt": "Calculate 7! (7 factorial).\nOutput only the final numerical answer.",
+  "referenceAnswer": "5040",
+  "expected": 5040
+}

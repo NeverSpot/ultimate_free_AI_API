@@ -1,0 +1,21 @@
+{
+  "id": "code_21",
+  "bucket": "code_generation",
+  "prompt": "Write a JavaScript function `clamp(val, min, max)` that constrains val within the range [min, max].\nOutput only the JavaScript code without extra commentary.",
+  "referenceAnswer": "function clamp(val, min, max) { return Math.min(Math.max(val, min), max); }",
+  "entrypoint": "clamp",
+  "testCases": [
+    {
+      "input": [5, 1, 10],
+      "expected": 5
+    },
+    {
+      "input": [-3, 0, 10],
+      "expected": 0
+    },
+    {
+      "input": [15, 0, 10],
+      "expected": 10
+    }
+  ]
+}

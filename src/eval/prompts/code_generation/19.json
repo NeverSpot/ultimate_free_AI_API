@@ -1,0 +1,17 @@
+{
+  "id": "code_19",
+  "bucket": "code_generation",
+  "prompt": "Write a JavaScript function `titleCase(str)` that formats words to have first letter capitalized and rest lowercased.\nOutput only the JavaScript code without extra commentary.",
+  "referenceAnswer": "function titleCase(str) { return str.toLowerCase().replace(/(^|\\s)\\w/g, m => m.toUpperCase()); }",
+  "entrypoint": "titleCase",
+  "testCases": [
+    {
+      "input": ["tHe sUn ALSo riSEs"],
+      "expected": "The Sun Also Rises"
+    },
+    {
+      "input": ["quick brown fox"],
+      "expected": "Quick Brown Fox"
+    }
+  ]
+}

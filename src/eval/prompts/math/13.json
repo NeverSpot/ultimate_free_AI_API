@@ -1,0 +1,7 @@
+{
+  "id": "math_13",
+  "bucket": "math",
+  "prompt": "What is the area of a triangle with base 18 cm and height 13 cm?\nOutput only the final numerical answer.",
+  "referenceAnswer": "117",
+  "expected": 117
+}

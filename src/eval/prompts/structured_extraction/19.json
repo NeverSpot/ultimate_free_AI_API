@@ -1,0 +1,12 @@
+{
+  "id": "struct_19",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: account_holder_id, meter_type, kilowatt_hours, amount_payable.\n\nRecord:\nEnergy utility statement: Account ACCT-501 recorded Electric meter usage of 640 kWh totaling $89.60.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"account_holder_id\": \"ACCT-501\",\n  \"meter_type\": \"Electric\",\n  \"kilowatt_hours\": 640,\n  \"amount_payable\": 89.6\n}",
+  "target": {
+    "account_holder_id": "ACCT-501",
+    "meter_type": "Electric",
+    "kilowatt_hours": 640,
+    "amount_payable": 89.6
+  }
+}

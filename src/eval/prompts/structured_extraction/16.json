@@ -1,0 +1,12 @@
+{
+  "id": "struct_16",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: policyholder, policy_reference, claimed_loss_amount, claim_decision.\n\nRecord:\nClaim document: Policyholder Diana Prince under policy POL-7721 claimed loss $4500.00, decision Approved.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"policyholder\": \"Diana Prince\",\n  \"policy_reference\": \"POL-7721\",\n  \"claimed_loss_amount\": 4500,\n  \"claim_decision\": \"Approved\"\n}",
+  "target": {
+    "policyholder": "Diana Prince",
+    "policy_reference": "POL-7721",
+    "claimed_loss_amount": 4500,
+    "claim_decision": "Approved"
+  }
+}

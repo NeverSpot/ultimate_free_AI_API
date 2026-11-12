@@ -1,0 +1,12 @@
+{
+  "id": "struct_12",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: reporter, defect_severity, affected_module, resolution_status.\n\nRecord:\nDefect ticket filed by Arthur Dent: Severity Critical in module AuthRouter, status Open.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"reporter\": \"Arthur Dent\",\n  \"defect_severity\": \"Critical\",\n  \"affected_module\": \"AuthRouter\",\n  \"resolution_status\": \"Open\"\n}",
+  "target": {
+    "reporter": "Arthur Dent",
+    "defect_severity": "Critical",
+    "affected_module": "AuthRouter",
+    "resolution_status": "Open"
+  }
+}

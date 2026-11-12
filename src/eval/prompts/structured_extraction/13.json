@@ -1,0 +1,12 @@
+{
+  "id": "struct_13",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: card_last4, charge_amount, merchant_name, authorized.\n\nRecord:\nCard alert: Card ending in 4112 charged $89.99 at BestBuy, transaction authorized: true.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"card_last4\": \"4112\",\n  \"charge_amount\": 89.99,\n  \"merchant_name\": \"BestBuy\",\n  \"authorized\": true\n}",
+  "target": {
+    "card_last4": "4112",
+    "charge_amount": 89.99,
+    "merchant_name": "BestBuy",
+    "authorized": true
+  }
+}

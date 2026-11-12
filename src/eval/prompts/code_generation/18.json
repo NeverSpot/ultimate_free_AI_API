@@ -1,0 +1,21 @@
+{
+  "id": "code_18",
+  "bucket": "code_generation",
+  "prompt": "Write a JavaScript function `gcd(a, b)` that returns the greatest common divisor of positive integers a and b.\nOutput only the JavaScript code without extra commentary.",
+  "referenceAnswer": "function gcd(a, b) { while (b !== 0) { const t = b; b = a % b; a = t; } return a; }",
+  "entrypoint": "gcd",
+  "testCases": [
+    {
+      "input": [48, 18],
+      "expected": 6
+    },
+    {
+      "input": [101, 10],
+      "expected": 1
+    },
+    {
+      "input": [54, 24],
+      "expected": 6
+    }
+  ]
+}

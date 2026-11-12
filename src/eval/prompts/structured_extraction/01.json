@@ -1,0 +1,12 @@
+{
+  "id": "struct_01",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: vendor, invoice_id, total, date.\n\nRecord:\nInvoice from CloudHost Inc: Invoice #INV-9901 issued on 2026-05-12 for a total of $320.50.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"vendor\": \"CloudHost Inc\",\n  \"invoice_id\": \"INV-9901\",\n  \"total\": 320.5,\n  \"date\": \"2026-05-12\"\n}",
+  "target": {
+    "vendor": "CloudHost Inc",
+    "invoice_id": "INV-9901",
+    "total": 320.5,
+    "date": "2026-05-12"
+  }
+}

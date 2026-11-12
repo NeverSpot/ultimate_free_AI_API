@@ -1,0 +1,22 @@
+{
+  "id": "json_01",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nProfile: Alex Mercer is a 29-year-old software engineer reachable at alex.mercer@example.com.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"name\": \"Alex Mercer\",\n  \"age\": 29,\n  \"email\": \"alex.mercer@example.com\"\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "age": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "email": {
+        "type": "string"
+      }
+    },
+    "required": ["name", "age", "email"]
+  }
+}

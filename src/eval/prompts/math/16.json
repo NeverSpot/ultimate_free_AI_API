@@ -1,0 +1,7 @@
+{
+  "id": "math_16",
+  "bucket": "math",
+  "prompt": "Calculate the total simple interest on a principal of $2500 at 6% per year for 4 years.\nOutput only the final numerical answer.",
+  "referenceAnswer": "600",
+  "expected": 600
+}

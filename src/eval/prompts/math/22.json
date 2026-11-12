@@ -1,0 +1,7 @@
+{
+  "id": "math_22",
+  "bucket": "math",
+  "prompt": "A car travels 315 miles in 4.5 hours. What is its average speed in miles per hour?\nOutput only the final numerical answer.",
+  "referenceAnswer": "70",
+  "expected": 70
+}

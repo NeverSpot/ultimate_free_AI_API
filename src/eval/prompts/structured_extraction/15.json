@@ -1,0 +1,12 @@
+{
+  "id": "struct_15",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: tenant_name, apartment_number, monthly_rental_rate, lease_term_months.\n\nRecord:\nLease contract: Tenant Peter Parker leased apartment 3B for 12 months at $1450 per month.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"tenant_name\": \"Peter Parker\",\n  \"apartment_number\": \"3B\",\n  \"monthly_rental_rate\": 1450,\n  \"lease_term_months\": 12\n}",
+  "target": {
+    "tenant_name": "Peter Parker",
+    "apartment_number": "3B",
+    "monthly_rental_rate": 1450,
+    "lease_term_months": 12
+  }
+}

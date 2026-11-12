@@ -1,0 +1,12 @@
+{
+  "id": "struct_10",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: region, alert_level, weather_phenomenon, expiry_time.\n\nRecord:\nWeather warning: Region Northwest issued alert Severe for Blizzard expiring at 18:00 UTC.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"region\": \"Northwest\",\n  \"alert_level\": \"Severe\",\n  \"weather_phenomenon\": \"Blizzard\",\n  \"expiry_time\": \"18:00 UTC\"\n}",
+  "target": {
+    "region": "Northwest",
+    "alert_level": "Severe",
+    "weather_phenomenon": "Blizzard",
+    "expiry_time": "18:00 UTC"
+  }
+}

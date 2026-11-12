@@ -1,0 +1,7 @@
+{
+  "id": "math_19",
+  "bucket": "math",
+  "prompt": "Evaluate combinations C(8, 3) = 8! / (3! * 5!).\nOutput only the final numerical answer.",
+  "referenceAnswer": "56",
+  "expected": 56
+}

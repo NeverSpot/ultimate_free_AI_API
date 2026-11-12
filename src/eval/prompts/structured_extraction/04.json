@@ -1,0 +1,12 @@
+{
+  "id": "struct_04",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: recipient_name, courier, tracking_id, weight_kg.\n\nRecord:\nShipping dispatch to recipient Michael Chang via FedEx under tracking 774892019283 weighing 4.2 kg.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"recipient_name\": \"Michael Chang\",\n  \"courier\": \"FedEx\",\n  \"tracking_id\": \"774892019283\",\n  \"weight_kg\": 4.2\n}",
+  "target": {
+    "recipient_name": "Michael Chang",
+    "courier": "FedEx",
+    "tracking_id": "774892019283",
+    "weight_kg": 4.2
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "id": "math_12",
+  "bucket": "math",
+  "prompt": "A rectangle has length 23 cm and width 14 cm. What is its perimeter in cm?\nOutput only the final numerical answer.",
+  "referenceAnswer": "74",
+  "expected": 74
+}
