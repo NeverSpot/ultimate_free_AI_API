@@ -2,22 +2,23 @@
 
 > Handoff file. Read first, rewrite last. Keep under 25 lines.
 
-- **Current block:** Block 17 complete (Deploy: Docker + Nginx + Postgres + Redis streaming proxy), Block 18 next
-- **Last green verify:** `npm run verify` -> exit 0, **344 hermetic tests** (2.98s)
+- **Current block:** Block 18 complete (Docs, diagram, demo — stranger clone <5 min)
+- **Last green verify:** `npm run verify` -> exit 0, **344 hermetic tests** (2.06s)
 - **Phase A (Aggregate): COMPLETE.** Blocks 1–10 merged to master at `7bdb247`.
 - **Phase B (Survive 429): 100% COMPLETE.** Capacity gate passed + Docker Compose deploy (`d39e7f4`).
 - **Phase C (Be good, not just available): COMPLETE.** Blocks 11–15 merged to master.
-- **Phase D (Prove it): IN PROGRESS.** Block 16 done (load test), Block 17 done (Docker + Nginx streaming deploy).
+- **Phase D (Prove it): COMPLETE.** Block 16 (load test), Block 17 (Docker + Nginx), Block 18 (docs + demo).
 
 ## Done
 
 - Blocks 11–15: Phase C complete (telemetry, eval harness, route(), budget limiter, idempotency).
 - Block 16: Mock upstream load test (Artillery, 4 metrics, report.md).
-- Block 17: Production Dockerfile (node:24-alpine, multi-stage, tini, non-root), Nginx streaming proxy config, response headers & keepalive, docker compose stack verified with `npm run smoke -- --stream`.
+- Block 17: Production Dockerfile, Nginx streaming proxy, docker compose stack.
+- Block 18: README rewrite (features, quick-start, Mermaid diagram, load numbers, eval table), docs/architecture.md extended, docs/eval-table.md, scripts/demo.sh.
 
 ## Next
 
-- Block 18: Docs, diagram, demo (stranger clone <5 min).
+- All 18 blocks complete. Merge `opencode/block-18-docs-demo` to master.
 
 ## Do not touch without a human
 
