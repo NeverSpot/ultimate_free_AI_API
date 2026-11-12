@@ -21,6 +21,7 @@ import {
   createDefaultEvalTable,
 } from '../routing/select';
 import type { LedgerClient } from '../limits/redis';
+import type { AccountingStore } from '../telemetry/store';
 
 /** A candidate target eligible for selection and execution. */
 export interface Candidate {
@@ -51,6 +52,10 @@ export interface ExecuteOptions {
   clock?: () => number;
   onComplete?: (meta: ExecuteMeta) => void;
   signal?: AbortSignal;
+  /** Optional accounting store — writes one row per terminal path in finally block. */
+  accountingStore?: AccountingStore;
+  /** Gateway request id for accounting correlation. */
+  requestId?: string;
 }
 
 /** Options passed to executeStream(). */
@@ -78,10 +83,29 @@ function withTimeout<T>(
   ms: number,
   message: string,
   providerId: string,
+  parentSignal?: AbortSignal,
 ): Promise<T> {
   const controller = new AbortController();
   return new Promise<T>((resolve, reject) => {
+    const onParentAbort = () => {
+      controller.abort();
+      reject(
+        new ProviderError('timeout', 'Client disconnected', { status: 499, provider: providerId }),
+      );
+    };
+
+    if (parentSignal) {
+      if (parentSignal.aborted) {
+        onParentAbort();
+        return;
+      }
+      parentSignal.addEventListener('abort', onParentAbort, { once: true });
+    }
+
     const timer = setTimeout(() => {
+      if (parentSignal) {
+        parentSignal.removeEventListener('abort', onParentAbort);
+      }
       controller.abort();
       reject(new ProviderError('timeout', message, { status: 504, provider: providerId }));
     }, ms);
@@ -89,10 +113,16 @@ function withTimeout<T>(
     operation(controller.signal).then(
       (value) => {
         clearTimeout(timer);
+        if (parentSignal) {
+          parentSignal.removeEventListener('abort', onParentAbort);
+        }
         resolve(value);
       },
       (reason: unknown) => {
         clearTimeout(timer);
+        if (parentSignal) {
+          parentSignal.removeEventListener('abort', onParentAbort);
+        }
         reject(reason);
       },
     );
@@ -148,6 +178,9 @@ export async function execute(
     parking,
     clock = Date.now,
     onComplete,
+    signal,
+    accountingStore,
+    requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
   } = options;
 
   const startMs = clock();
@@ -161,159 +194,234 @@ export async function execute(
     limit: 0,
   });
 
-  if (ranked.length === 0) {
-    throw new ProviderError('exhausted', 'No available model with remaining capacity', {
-      status: 503,
-      provider: 'router',
-    });
-  }
-
   let attempts = 0;
   let lastError: ProviderError | undefined;
   const parkedThisCall = new Set<string>();
+  const routeReason = 'capacity';
 
-  for (const target of ranked) {
-    if (attempts >= maxAttempts) {
-      break;
-    }
+  let finalResponse: CanonicalResponse | undefined;
+  let finalProviderId = 'router';
+  let finalModelId = request.model ?? 'unknown';
+  let finalCredentialId: string | undefined;
 
-    const nowMs = clock();
-    if (nowMs >= deadlineMs) {
-      lastError ??= new ProviderError('timeout', 'Request deadline exceeded', {
-        status: 504,
+  try {
+    if (ranked.length === 0) {
+      throw new ProviderError('exhausted', 'No available model with remaining capacity', {
+        status: 503,
         provider: 'router',
       });
-      break;
     }
 
-    const { modelId, credential, providerId, adapterId } = target;
+    for (const target of ranked) {
+      if (attempts >= maxAttempts) {
+        break;
+      }
 
-    if (parkedThisCall.has(credential.id)) {
-      continue;
-    }
-
-    if (parking !== undefined) {
-      const parkStatus = await parking.isParked(credential.id);
-      if (parkStatus.parked) {
-        lastError ??= new ProviderError('rate_limited', 'Credential is parked', {
-          status: 429,
-          retryAfterMs: parkStatus.retryAfterMs,
-          provider: providerId,
+      const nowMs = clock();
+      if (nowMs >= deadlineMs) {
+        lastError ??= new ProviderError('timeout', 'Request deadline exceeded', {
+          status: 504,
+          provider: 'router',
         });
-        continue;
-      }
-    }
-
-    // Check breaker before reserving or calling upstream
-    const bTarget: BreakerTarget = { provider: providerId, model: modelId };
-    const permit = await breaker.allow(bTarget);
-    if (!permit.allowed) {
-      lastError ??= new ProviderError('upstream', 'Circuit breaker open', {
-        status: 503,
-        retryAfterMs: permit.retryAfterMs,
-        provider: providerId,
-      });
-      continue;
-    }
-
-    const entry = adapterMap.get(adapterId);
-    if (entry === undefined) {
-      continue;
-    }
-
-    const policy = policies.get(modelId);
-    let reservation: Reservation | undefined;
-
-    if (policy !== undefined) {
-      const reserveResult = await ledger.reserve({
-        credentialId: credential.id,
-        modelId,
-        policy,
-        cost: 1,
-      });
-
-      if (!reserveResult.ok) {
-        lastError ??= new ProviderError('rate_limited', 'Rate limit ledger exhausted', {
-          status: 429,
-          retryAfterMs: reserveResult.retryAfterMs,
-          provider: providerId,
-        });
-        continue;
-      }
-      reservation = reserveResult.reservation;
-    }
-
-    attempts += 1;
-    const remainingBudgetMs = Math.max(1, deadlineMs - clock());
-    const callTimeoutMs = Math.min(attemptTimeoutMs, remainingBudgetMs);
-
-    try {
-      const response = await withTimeout(
-        (signal) => entry.adapter.chat(request, credential, signal),
-        callTimeoutMs,
-        `Provider timeout after ${callTimeoutMs}ms`,
-        providerId,
-      );
-
-      await breaker.recordSuccess(bTarget);
-      if (reservation !== undefined) {
-        await ledger.commit(reservation, reservation.cost);
+        break;
       }
 
-      lru.set(credential.id, clock());
-      onComplete?.({
-        providerId,
-        modelId,
-        credentialId: credential.id,
-        attempts,
-      });
-      return response;
-    } catch (err) {
-      const providerErr = toProviderError(err, providerId);
-      lastError = providerErr;
+      const { modelId, credential, providerId, adapterId } = target;
 
-      if (reservation !== undefined) {
-        await ledger.release(reservation);
-      }
-
-      if (TERMINAL_KINDS.has(providerErr.kind)) {
-        throw providerErr;
-      }
-
-      if (providerErr.kind === 'rate_limited') {
-        parkedThisCall.add(credential.id);
-        if (parking !== undefined) {
-          const waitMs = providerErr.retryAfterMs ?? 1_000;
-          await parking.park(credential.id, clock() + waitMs);
-        }
+      if (parkedThisCall.has(credential.id)) {
         continue;
       }
 
-      if (providerErr.kind === 'exhausted') {
-        parkedThisCall.add(credential.id);
-        if (parking !== undefined) {
-          const decision = parkDecision({
-            kind: 'exhausted',
-            retryAfterMs: providerErr.retryAfterMs,
-            now: clock(),
+      if (parking !== undefined) {
+        const parkStatus = await parking.isParked(credential.id);
+        if (parkStatus.parked) {
+          lastError ??= new ProviderError('rate_limited', 'Credential is parked', {
+            status: 429,
+            retryAfterMs: parkStatus.retryAfterMs,
+            provider: providerId,
           });
-          await parking.applyDecision(credential.id, decision, clock());
+          continue;
         }
+      }
+
+      // Check breaker before reserving or calling upstream
+      const bTarget: BreakerTarget = { provider: providerId, model: modelId };
+      const permit = await breaker.allow(bTarget);
+      if (!permit.allowed) {
+        lastError ??= new ProviderError('upstream', 'Circuit breaker open', {
+          status: 503,
+          retryAfterMs: permit.retryAfterMs,
+          provider: providerId,
+        });
         continue;
       }
 
-      // upstream or timeout: trip per-(provider, model) breaker
-      await breaker.recordFailure(bTarget);
-    }
-  }
+      const entry = adapterMap.get(adapterId);
+      if (entry === undefined) {
+        continue;
+      }
 
-  throw (
-    lastError ??
-    new ProviderError('upstream', 'All routing attempts failed', {
-      status: 503,
-      provider: 'router',
-    })
-  );
+      const policy = policies.get(modelId);
+      let reservation: Reservation | undefined;
+
+      if (policy !== undefined) {
+        const reserveResult = await ledger.reserve({
+          credentialId: credential.id,
+          modelId,
+          policy,
+          cost: 1,
+        });
+
+        if (!reserveResult.ok) {
+          lastError ??= new ProviderError('rate_limited', 'Rate limit ledger exhausted', {
+            status: 429,
+            retryAfterMs: reserveResult.retryAfterMs,
+            provider: providerId,
+          });
+          continue;
+        }
+        reservation = reserveResult.reservation;
+      }
+
+      attempts += 1;
+      finalProviderId = providerId;
+      finalModelId = modelId;
+      finalCredentialId = credential.id;
+      const remainingBudgetMs = Math.max(1, deadlineMs - clock());
+      const callTimeoutMs = Math.min(attemptTimeoutMs, remainingBudgetMs);
+
+      try {
+        const response = await withTimeout(
+          (subSignal) => entry.adapter.chat(request, credential, subSignal),
+          callTimeoutMs,
+          `Provider timeout after ${callTimeoutMs}ms`,
+          providerId,
+          signal,
+        );
+
+        await breaker.recordSuccess(bTarget);
+        if (reservation !== undefined) {
+          await ledger.commit(reservation, reservation.cost);
+        }
+
+        lru.set(credential.id, clock());
+        onComplete?.({
+          providerId,
+          modelId,
+          credentialId: credential.id,
+          attempts,
+        });
+
+        finalResponse = response;
+        finalProviderId = providerId;
+        finalModelId = modelId;
+        finalCredentialId = credential.id;
+
+        return response;
+      } catch (err) {
+        const providerErr = toProviderError(err, providerId);
+        lastError = providerErr;
+
+        if (reservation !== undefined) {
+          await ledger.release(reservation);
+        }
+
+        if (signal?.aborted) {
+          throw providerErr;
+        }
+
+        if (TERMINAL_KINDS.has(providerErr.kind)) {
+          throw providerErr;
+        }
+
+        if (providerErr.kind === 'rate_limited') {
+          parkedThisCall.add(credential.id);
+          if (parking !== undefined) {
+            const waitMs = providerErr.retryAfterMs ?? 1_000;
+            await parking.park(credential.id, clock() + waitMs);
+          }
+          continue;
+        }
+
+        if (providerErr.kind === 'exhausted') {
+          parkedThisCall.add(credential.id);
+          if (parking !== undefined) {
+            const decision = parkDecision({
+              kind: 'exhausted',
+              retryAfterMs: providerErr.retryAfterMs,
+              now: clock(),
+            });
+            await parking.applyDecision(credential.id, decision, clock());
+          }
+          continue;
+        }
+
+        // upstream or timeout: trip per-(provider, model) breaker
+        await breaker.recordFailure(bTarget);
+      }
+    }
+
+    throw (
+      lastError ??
+      new ProviderError('upstream', 'All routing attempts failed', {
+        status: 503,
+        provider: 'router',
+      })
+    );
+  } catch (err) {
+    if (err instanceof ProviderError) {
+      lastError = err;
+    } else {
+      lastError = toProviderError(err, finalProviderId);
+    }
+    throw err;
+  } finally {
+    const latencyMs = Math.max(0, clock() - startMs);
+    let status: 'success' | 'failed' | 'timeout' | 'aborted';
+    if (finalResponse) {
+      status = 'success';
+    } else if (signal?.aborted || lastError?.status === 499) {
+      status = 'aborted';
+    } else if (lastError?.kind === 'timeout') {
+      status = 'timeout';
+    } else {
+      status = 'failed';
+    }
+
+    const httpStatus = finalResponse ? null : lastError?.status;
+    const errorKind = finalResponse ? undefined : lastError?.kind;
+
+    let promptTokens = 0;
+    let completionTokens = 0;
+    let tokensEstimated = false;
+    let costUsd = 0;
+
+    if (finalResponse) {
+      promptTokens = finalResponse.usage.prompt_tokens;
+      completionTokens = finalResponse.usage.completion_tokens;
+      tokensEstimated = finalResponse.usage.estimated ?? false;
+      costUsd = (finalResponse.usage.total_tokens / 1000) * 0.001;
+    }
+
+    accountingStore?.record({
+      requestId,
+      provider: finalProviderId,
+      model: finalModelId,
+      credentialId: finalCredentialId,
+      taskBucket: bucket,
+      status,
+      httpStatus,
+      promptTokens,
+      completionTokens,
+      tokensEstimated,
+      costUsd,
+      latencyMs,
+      ttftMs: undefined,
+      attemptCount: attempts,
+      routeReason,
+      errorKind,
+    });
+  }
 }
 
 /**
@@ -345,6 +453,8 @@ export async function* executeStream(
     onComplete,
     onFirstChunk,
     signal,
+    accountingStore,
+    requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
   } = options;
 
   const startMs = clock();
@@ -358,261 +468,334 @@ export async function* executeStream(
     limit: 0,
   });
 
-  if (ranked.length === 0) {
-    throw new ProviderError('exhausted', 'No available model with remaining capacity', {
-      status: 503,
-      provider: 'router',
-    });
-  }
-
   let attempts = 0;
   let lastError: ProviderError | undefined;
   const parkedThisCall = new Set<string>();
+  const routeReason = 'capacity';
 
-  for (const target of ranked) {
-    if (attempts >= maxAttempts) {
-      break;
-    }
+  let finalProviderId = 'router';
+  let finalModelId = request.model ?? 'unknown';
+  let finalCredentialId: string | undefined;
+  let finalTtftMs: number | undefined;
+  let finalPromptTokens = 0;
+  let finalCompletionTokens = 0;
+  let finalTokensEstimated = false;
+  let streamSucceeded = false;
 
-    const nowMs = clock();
-    if (nowMs >= deadlineMs) {
-      lastError ??= new ProviderError('timeout', 'Request deadline exceeded', {
-        status: 504,
-        provider: 'router',
-      });
-      break;
-    }
-
-    const { modelId, credential, providerId, adapterId } = target;
-
-    if (parkedThisCall.has(credential.id)) {
-      continue;
-    }
-
-    if (parking !== undefined) {
-      const parkStatus = await parking.isParked(credential.id);
-      if (parkStatus.parked) {
-        lastError ??= new ProviderError('rate_limited', 'Credential is parked', {
-          status: 429,
-          retryAfterMs: parkStatus.retryAfterMs,
-          provider: providerId,
-        });
-        continue;
-      }
-    }
-
-    // Check breaker before reserving or calling upstream
-    const bTarget: BreakerTarget = { provider: providerId, model: modelId };
-    const permit = await breaker.allow(bTarget);
-    if (!permit.allowed) {
-      lastError ??= new ProviderError('upstream', 'Circuit breaker open', {
+  try {
+    if (ranked.length === 0) {
+      throw new ProviderError('exhausted', 'No available model with remaining capacity', {
         status: 503,
-        retryAfterMs: permit.retryAfterMs,
-        provider: providerId,
-      });
-      continue;
-    }
-
-    const entry = adapterMap.get(adapterId);
-    if (entry === undefined) {
-      continue;
-    }
-
-    const policy = policies.get(modelId);
-    let reservation: Reservation | undefined;
-
-    if (policy !== undefined) {
-      const reserveResult = await ledger.reserve({
-        credentialId: credential.id,
-        modelId,
-        policy,
-        cost: 1,
-      });
-
-      if (!reserveResult.ok) {
-        lastError ??= new ProviderError('rate_limited', 'Rate limit ledger exhausted', {
-          status: 429,
-          retryAfterMs: reserveResult.retryAfterMs,
-          provider: providerId,
-        });
-        continue;
-      }
-      reservation = reserveResult.reservation;
-    }
-
-    attempts += 1;
-    const remainingBudgetMs = Math.max(1, deadlineMs - clock());
-    const callTimeoutMs = Math.min(attemptTimeoutMs, remainingBudgetMs);
-
-    if (signal?.aborted) {
-      if (reservation !== undefined) {
-        await ledger.release(reservation);
-      }
-      throw new ProviderError('timeout', 'Client disconnected', {
-        status: 499,
         provider: 'router',
       });
     }
 
-    const attemptController = new AbortController();
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      attemptController.abort();
-    }, callTimeoutMs);
-
-    const onClientAbort = () => {
-      attemptController.abort();
-    };
-
-    if (signal) {
-      signal.addEventListener('abort', onClientAbort, { once: true });
-    }
-
-    let upstreamIterator: AsyncIterator<CanonicalChunk>;
-    let firstItem: IteratorResult<CanonicalChunk>;
-
-    try {
-      const streamIterable = entry.adapter.stream(request, credential, attemptController.signal);
-      upstreamIterator = streamIterable[Symbol.asyncIterator]();
-      firstItem = await upstreamIterator.next();
-    } catch (err) {
-      clearTimeout(timer);
-      if (signal) {
-        signal.removeEventListener('abort', onClientAbort);
+    for (const target of ranked) {
+      if (attempts >= maxAttempts) {
+        break;
       }
 
-      let providerErr: ProviderError;
-      if (timedOut) {
-        providerErr = new ProviderError('timeout', `Provider timeout after ${callTimeoutMs}ms`, {
+      const nowMs = clock();
+      if (nowMs >= deadlineMs) {
+        lastError ??= new ProviderError('timeout', 'Request deadline exceeded', {
           status: 504,
-          provider: providerId,
+          provider: 'router',
         });
-      } else if (signal?.aborted) {
-        providerErr = new ProviderError('timeout', 'Client disconnected', {
-          status: 499,
-          provider: providerId,
-        });
-      } else {
-        providerErr = toProviderError(err, providerId);
+        break;
       }
 
-      lastError = providerErr;
+      const { modelId, credential, providerId, adapterId } = target;
 
-      if (reservation !== undefined) {
-        await ledger.release(reservation);
+      if (parkedThisCall.has(credential.id)) {
+        continue;
       }
+
+      if (parking !== undefined) {
+        const parkStatus = await parking.isParked(credential.id);
+        if (parkStatus.parked) {
+          lastError ??= new ProviderError('rate_limited', 'Credential is parked', {
+            status: 429,
+            retryAfterMs: parkStatus.retryAfterMs,
+            provider: providerId,
+          });
+          continue;
+        }
+      }
+
+      // Check breaker before reserving or calling upstream
+      const bTarget: BreakerTarget = { provider: providerId, model: modelId };
+      const permit = await breaker.allow(bTarget);
+      if (!permit.allowed) {
+        lastError ??= new ProviderError('upstream', 'Circuit breaker open', {
+          status: 503,
+          retryAfterMs: permit.retryAfterMs,
+          provider: providerId,
+        });
+        continue;
+      }
+
+      const entry = adapterMap.get(adapterId);
+      if (entry === undefined) {
+        continue;
+      }
+
+      const policy = policies.get(modelId);
+      let reservation: Reservation | undefined;
+
+      if (policy !== undefined) {
+        const reserveResult = await ledger.reserve({
+          credentialId: credential.id,
+          modelId,
+          policy,
+          cost: 1,
+        });
+
+        if (!reserveResult.ok) {
+          lastError ??= new ProviderError('rate_limited', 'Rate limit ledger exhausted', {
+            status: 429,
+            retryAfterMs: reserveResult.retryAfterMs,
+            provider: providerId,
+          });
+          continue;
+        }
+        reservation = reserveResult.reservation;
+      }
+
+      attempts += 1;
+      finalProviderId = providerId;
+      finalModelId = modelId;
+      finalCredentialId = credential.id;
+      const remainingBudgetMs = Math.max(1, deadlineMs - clock());
+      const callTimeoutMs = Math.min(attemptTimeoutMs, remainingBudgetMs);
 
       if (signal?.aborted) {
-        throw providerErr;
-      }
-
-      if (TERMINAL_KINDS.has(providerErr.kind)) {
-        throw providerErr;
-      }
-
-      if (providerErr.kind === 'rate_limited') {
-        parkedThisCall.add(credential.id);
-        if (parking !== undefined) {
-          const waitMs = providerErr.retryAfterMs ?? 1_000;
-          await parking.park(credential.id, clock() + waitMs);
+        if (reservation !== undefined) {
+          await ledger.release(reservation);
         }
-        continue;
+        throw new ProviderError('timeout', 'Client disconnected', {
+          status: 499,
+          provider: 'router',
+        });
       }
 
-      if (providerErr.kind === 'exhausted') {
-        parkedThisCall.add(credential.id);
-        if (parking !== undefined) {
-          const decision = parkDecision({
-            kind: 'exhausted',
-            retryAfterMs: providerErr.retryAfterMs,
-            now: clock(),
-          });
-          await parking.applyDecision(credential.id, decision, clock());
-        }
-        continue;
-      }
+      const attemptController = new AbortController();
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        attemptController.abort();
+      }, callTimeoutMs);
 
-      // upstream or timeout: trip per-(provider, model) breaker
-      await breaker.recordFailure(bTarget);
-      continue;
-    } finally {
-      clearTimeout(timer);
-    }
+      const onClientAbort = () => {
+        attemptController.abort();
+      };
 
-    // First chunk successfully obtained!
-    await breaker.recordSuccess(bTarget);
-    lru.set(credential.id, clock());
-    const meta: ExecuteMeta = {
-      providerId,
-      modelId,
-      credentialId: credential.id,
-      attempts,
-    };
-    onFirstChunk?.(meta);
-
-    if (firstItem.done) {
-      if (reservation !== undefined) {
-        await ledger.commit(reservation, reservation.cost);
-      }
-      onComplete?.(meta);
       if (signal) {
-        signal.removeEventListener('abort', onClientAbort);
+        signal.addEventListener('abort', onClientAbort, { once: true });
       }
-      return;
-    }
 
-    yield firstItem.value;
+      let upstreamIterator: AsyncIterator<CanonicalChunk>;
+      let firstItem: IteratorResult<CanonicalChunk>;
 
-    // Remaining chunks: failover is FORBIDDEN after first chunk.
-    try {
-      while (true) {
-        if (signal?.aborted) {
-          throw new ProviderError('timeout', 'Client disconnected', {
+      try {
+        const streamIterable = entry.adapter.stream(request, credential, attemptController.signal);
+        upstreamIterator = streamIterable[Symbol.asyncIterator]();
+        firstItem = await upstreamIterator.next();
+      } catch (err) {
+        clearTimeout(timer);
+        if (signal) {
+          signal.removeEventListener('abort', onClientAbort);
+        }
+
+        let providerErr: ProviderError;
+        if (timedOut) {
+          providerErr = new ProviderError('timeout', `Provider timeout after ${callTimeoutMs}ms`, {
+            status: 504,
+            provider: providerId,
+          });
+        } else if (signal?.aborted) {
+          providerErr = new ProviderError('timeout', 'Client disconnected', {
             status: 499,
             provider: providerId,
           });
+        } else {
+          providerErr = toProviderError(err, providerId);
         }
-        const nextItem = await upstreamIterator.next();
-        if (nextItem.done) {
-          break;
+
+        lastError = providerErr;
+
+        if (reservation !== undefined) {
+          await ledger.release(reservation);
         }
-        yield nextItem.value;
+
+        if (signal?.aborted) {
+          throw providerErr;
+        }
+
+        if (TERMINAL_KINDS.has(providerErr.kind)) {
+          throw providerErr;
+        }
+
+        if (providerErr.kind === 'rate_limited') {
+          parkedThisCall.add(credential.id);
+          if (parking !== undefined) {
+            const waitMs = providerErr.retryAfterMs ?? 1_000;
+            await parking.park(credential.id, clock() + waitMs);
+          }
+          continue;
+        }
+
+        if (providerErr.kind === 'exhausted') {
+          parkedThisCall.add(credential.id);
+          if (parking !== undefined) {
+            const decision = parkDecision({
+              kind: 'exhausted',
+              retryAfterMs: providerErr.retryAfterMs,
+              now: clock(),
+            });
+            await parking.applyDecision(credential.id, decision, clock());
+          }
+          continue;
+        }
+
+        // upstream or timeout: trip per-(provider, model) breaker
+        await breaker.recordFailure(bTarget);
+        continue;
+      } finally {
+        clearTimeout(timer);
       }
 
-      if (reservation !== undefined) {
-        await ledger.commit(reservation, reservation.cost);
+      // First chunk successfully obtained!
+      await breaker.recordSuccess(bTarget);
+      lru.set(credential.id, clock());
+      const meta: ExecuteMeta = {
+        providerId,
+        modelId,
+        credentialId: credential.id,
+        attempts,
+      };
+      onFirstChunk?.(meta);
+
+      finalTtftMs = Math.max(1, clock() - startMs);
+      finalProviderId = providerId;
+      finalModelId = modelId;
+      finalCredentialId = credential.id;
+
+      if (firstItem.done) {
+        if (reservation !== undefined) {
+          await ledger.commit(reservation, reservation.cost);
+        }
+        onComplete?.(meta);
+        if (signal) {
+          signal.removeEventListener('abort', onClientAbort);
+        }
+        streamSucceeded = true;
+        return;
       }
-      onComplete?.(meta);
-      return;
-    } catch (err) {
-      const providerErr = toProviderError(err, providerId);
-      if (reservation !== undefined) {
-        await ledger.commit(reservation, reservation.cost);
-      }
-      await breaker.recordFailure(bTarget);
-      throw providerErr;
-    } finally {
-      if (signal) {
-        signal.removeEventListener('abort', onClientAbort);
-      }
-      if (typeof upstreamIterator.return === 'function') {
-        try {
-          await upstreamIterator.return();
-        } catch {
-          // ignore cleanup errors
+
+      yield firstItem.value;
+
+      // Remaining chunks: failover is FORBIDDEN after first chunk.
+      try {
+        while (true) {
+          if (signal?.aborted) {
+            throw new ProviderError('timeout', 'Client disconnected', {
+              status: 499,
+              provider: providerId,
+            });
+          }
+          const nextItem = await upstreamIterator.next();
+          if (nextItem.done) {
+            break;
+          }
+          if (nextItem.value.usage !== undefined) {
+            finalPromptTokens = nextItem.value.usage.prompt_tokens;
+            finalCompletionTokens = nextItem.value.usage.completion_tokens;
+            finalTokensEstimated = nextItem.value.usage.estimated ?? false;
+          }
+          yield nextItem.value;
+        }
+
+        if (reservation !== undefined) {
+          await ledger.commit(reservation, reservation.cost);
+        }
+        onComplete?.(meta);
+        streamSucceeded = true;
+        return;
+      } catch (err) {
+        const providerErr = toProviderError(err, providerId);
+        if (reservation !== undefined) {
+          await ledger.commit(reservation, reservation.cost);
+        }
+        await breaker.recordFailure(bTarget);
+        throw providerErr;
+      } finally {
+        if (signal) {
+          signal.removeEventListener('abort', onClientAbort);
+        }
+        if (typeof upstreamIterator.return === 'function') {
+          try {
+            await upstreamIterator.return();
+          } catch {
+            // ignore cleanup errors
+          }
         }
       }
     }
-  }
 
-  throw (
-    lastError ??
-    new ProviderError('upstream', 'All routing attempts failed', {
-      status: 503,
-      provider: 'router',
-    })
-  );
+    throw (
+      lastError ??
+      new ProviderError('upstream', 'All routing attempts failed', {
+        status: 503,
+        provider: 'router',
+      })
+    );
+  } catch (err) {
+    if (err instanceof ProviderError) {
+      lastError = err;
+    } else {
+      lastError = toProviderError(err, finalProviderId);
+    }
+    throw err;
+  } finally {
+    const latencyMs = Math.max(0, clock() - startMs);
+    let status: 'success' | 'failed' | 'timeout' | 'aborted';
+    if (streamSucceeded) {
+      status = 'success';
+    } else if (signal?.aborted || lastError?.status === 499) {
+      status = 'aborted';
+    } else if (lastError?.kind === 'timeout') {
+      status = 'timeout';
+    } else {
+      status = 'failed';
+    }
+
+    const httpStatus = streamSucceeded ? null : lastError?.status;
+    const errorKind = streamSucceeded ? undefined : lastError?.kind;
+
+    let costUsd = 0;
+    if (streamSucceeded && finalPromptTokens + finalCompletionTokens > 0) {
+      costUsd = ((finalPromptTokens + finalCompletionTokens) / 1000) * 0.001;
+    }
+
+    accountingStore?.record({
+      requestId,
+      provider: finalProviderId,
+      model: finalModelId,
+      credentialId: finalCredentialId,
+      taskBucket: bucket,
+      status,
+      httpStatus,
+      promptTokens: finalPromptTokens,
+      completionTokens: finalCompletionTokens,
+      tokensEstimated: finalTokensEstimated,
+      costUsd,
+      latencyMs,
+      ttftMs: finalTtftMs,
+      attemptCount: attempts,
+      routeReason,
+      errorKind,
+    });
+  }
 }
 
 /** Build a stateful-client executor bound to Redis-backed ledger and breaker instances. */
