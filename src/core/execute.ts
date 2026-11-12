@@ -22,6 +22,7 @@ import {
 } from '../routing/select';
 import type { LedgerClient } from '../limits/redis';
 import type { AccountingStore } from '../telemetry/store';
+import type { BudgetLimiter } from '../budget/limiter';
 
 /** A candidate target eligible for selection and execution. */
 export interface Candidate {
@@ -56,6 +57,27 @@ export interface ExecuteOptions {
   accountingStore?: AccountingStore;
   /** Gateway request id for accounting correlation. */
   requestId?: string;
+  /** Optional user identifier for spend budget tracking. Defaults to request.user if omitted. */
+  userId?: string;
+  /** Optional budget limiter. If provided and a userId is available, reserves worst-case USD before dispatch and reconciles in finally. */
+  budgetLimiter?: BudgetLimiter;
+  /** Worst-case cost estimate in USD for this request. If omitted, estimated from request tokens. */
+  worstCaseUsd?: number;
+}
+
+/** Estimate worst-case USD cost for a request based on prompt characters and max_tokens. */
+export function estimateWorstCaseCost(request: CanonicalRequest): number {
+  let promptChars = 0;
+  for (const msg of request.messages) {
+    if (msg.content) {
+      promptChars += msg.content.length;
+    }
+  }
+  const promptTokens = Math.max(1, Math.ceil(promptChars / 4));
+  const maxTokens = request.max_tokens ?? 4096;
+  const totalTokens = promptTokens + maxTokens;
+  // Gateway model price default: $0.001 per 1,000 tokens
+  return (totalTokens / 1000) * 0.001;
 }
 
 /** Options passed to executeStream(). */
@@ -204,7 +226,26 @@ export async function execute(
   let finalModelId = request.model ?? 'unknown';
   let finalCredentialId: string | undefined;
 
+  const effectiveUserId = options.userId ?? request.user;
+  let budgetReservationId: string | undefined;
+
   try {
+    if (options.budgetLimiter !== undefined && effectiveUserId !== undefined) {
+      const worstCase = options.worstCaseUsd ?? estimateWorstCaseCost(request);
+      const budgetReserve = await options.budgetLimiter.reserve(effectiveUserId, worstCase);
+      if (!budgetReserve.ok) {
+        throw new ProviderError(
+          'rate_limited',
+          `User spend budget exceeded for user ${effectiveUserId}`,
+          {
+            status: 429,
+            provider: 'router',
+          },
+        );
+      }
+      budgetReservationId = budgetReserve.reservationId;
+    }
+
     if (ranked.length === 0) {
       throw new ProviderError('exhausted', 'No available model with remaining capacity', {
         status: 503,
@@ -403,6 +444,22 @@ export async function execute(
       costUsd = (finalResponse.usage.total_tokens / 1000) * 0.001;
     }
 
+    if (
+      options.budgetLimiter !== undefined &&
+      effectiveUserId !== undefined &&
+      budgetReservationId !== undefined
+    ) {
+      try {
+        if (finalResponse) {
+          await options.budgetLimiter.reconcile(effectiveUserId, budgetReservationId, costUsd);
+        } else {
+          await options.budgetLimiter.release(effectiveUserId, budgetReservationId);
+        }
+      } catch {
+        // Prevent budget errors from interfering with terminal flow
+      }
+    }
+
     accountingStore?.record({
       requestId,
       provider: finalProviderId,
@@ -482,7 +539,26 @@ export async function* executeStream(
   let finalTokensEstimated = false;
   let streamSucceeded = false;
 
+  const effectiveUserId = options.userId ?? request.user;
+  let budgetReservationId: string | undefined;
+
   try {
+    if (options.budgetLimiter !== undefined && effectiveUserId !== undefined) {
+      const worstCase = options.worstCaseUsd ?? estimateWorstCaseCost(request);
+      const budgetReserve = await options.budgetLimiter.reserve(effectiveUserId, worstCase);
+      if (!budgetReserve.ok) {
+        throw new ProviderError(
+          'rate_limited',
+          `User spend budget exceeded for user ${effectiveUserId}`,
+          {
+            status: 429,
+            provider: 'router',
+          },
+        );
+      }
+      budgetReservationId = budgetReserve.reservationId;
+    }
+
     if (ranked.length === 0) {
       throw new ProviderError('exhausted', 'No available model with remaining capacity', {
         status: 503,
@@ -775,6 +851,22 @@ export async function* executeStream(
     let costUsd = 0;
     if (streamSucceeded && finalPromptTokens + finalCompletionTokens > 0) {
       costUsd = ((finalPromptTokens + finalCompletionTokens) / 1000) * 0.001;
+    }
+
+    if (
+      options.budgetLimiter !== undefined &&
+      effectiveUserId !== undefined &&
+      budgetReservationId !== undefined
+    ) {
+      try {
+        if (streamSucceeded) {
+          await options.budgetLimiter.reconcile(effectiveUserId, budgetReservationId, costUsd);
+        } else {
+          await options.budgetLimiter.release(effectiveUserId, budgetReservationId);
+        }
+      } catch {
+        // Prevent budget errors from interfering with terminal flow
+      }
     }
 
     accountingStore?.record({

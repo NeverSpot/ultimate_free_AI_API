@@ -37,22 +37,27 @@ export async function runMigrations(
   options: { dir?: string } = {},
 ): Promise<MigrationResult> {
   const migrations = await loadMigrations(options.dir ?? DEFAULT_MIGRATIONS_DIR);
-  await ensureMigrationsTable(client);
+  await client.query('select pg_advisory_lock(84729104)');
+  try {
+    await ensureMigrationsTable(client);
 
-  const applied: string[] = [];
-  const skipped: string[] = [];
+    const applied: string[] = [];
+    const skipped: string[] = [];
 
-  for (const migration of migrations) {
-    if (await hasMigration(client, migration.version)) {
-      skipped.push(migration.version);
-      continue;
+    for (const migration of migrations) {
+      if (await hasMigration(client, migration.version)) {
+        skipped.push(migration.version);
+        continue;
+      }
+
+      await applyMigration(client, migration);
+      applied.push(migration.version);
     }
 
-    await applyMigration(client, migration);
-    applied.push(migration.version);
+    return { applied, skipped };
+  } finally {
+    await client.query('select pg_advisory_unlock(84729104)');
   }
-
-  return { applied, skipped };
 }
 
 /** Read `*.sql` files from `dir` in deterministic lexical order. */

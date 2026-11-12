@@ -121,12 +121,12 @@ npm run test:int -- --test-name-pattern "idempotency"
 
 | Block | Verification Command | Status |
 |-------|----------------------|--------|
-| 11 | `npm run test:int -- --test-name-pattern "accounting"` | pending |
-| 12 | `npm run eval` | pending |
-| 13 | `npm run test -- --test-name-pattern "policy"` | pending |
-| 14 | `npm run test:int -- --test-name-pattern "budget"` | pending |
+| 11 | `npm run test:int -- --test-name-pattern "accounting"` | passed |
+| 12 | `npm run eval` | passed |
+| 13 | `npm run test -- --test-name-pattern "policy"` | passed |
+| 14 | `npm run test:int -- --test-name-pattern "budget"` | passed |
 | 15 | `npm run test:int -- --test-name-pattern "idempotency"` | pending |
-| **Gate** | `npm run test -- --test-name-pattern "policy"` (swap store) | pending |
+| **Gate** | `npm run test -- --test-name-pattern "policy"` (swap store) | passed |
 
 ---
 
