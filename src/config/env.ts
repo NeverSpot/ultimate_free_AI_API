@@ -6,6 +6,7 @@ export interface Config {
   requestDeadlineMs: number;
   logLevel: string;
   nodeEnv: string;
+  sseHeadersEnabled?: boolean;
 }
 
 const DEFAULT_PORT = 8080;
@@ -56,6 +57,10 @@ export function loadConfig(raw: NodeJS.ProcessEnv): Config {
   }
 
   const nodeEnv = raw.NODE_ENV?.trim() || DEFAULT_NODE_ENV;
+  const sseHeadersEnabled =
+    raw.SSE_HEADERS_ENABLED !== undefined
+      ? raw.SSE_HEADERS_ENABLED.trim().toLowerCase() === 'true'
+      : true;
 
   if (problems.length > 0) {
     throw new Error(
@@ -71,6 +76,7 @@ export function loadConfig(raw: NodeJS.ProcessEnv): Config {
     requestDeadlineMs,
     logLevel,
     nodeEnv,
+    sseHeadersEnabled,
   };
 }
 
