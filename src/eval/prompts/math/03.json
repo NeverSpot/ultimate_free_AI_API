@@ -1,0 +1,7 @@
+{
+  "id": "math_03",
+  "bucket": "math",
+  "prompt": "What is 1024 / 16?\nOutput only the final numerical answer.",
+  "referenceAnswer": "64",
+  "expected": 64
+}

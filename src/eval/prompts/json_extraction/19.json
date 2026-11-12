@@ -1,0 +1,24 @@
+{
+  "id": "json_19",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nShipment 1Z999AA10123456784 via UPS, weight 2.75 kg, delivered status: true.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"trackingNumber\": \"1Z999AA10123456784\",\n  \"carrier\": \"UPS\",\n  \"weightKg\": 2.75,\n  \"delivered\": true\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "trackingNumber": {
+        "type": "string"
+      },
+      "carrier": {
+        "type": "string"
+      },
+      "weightKg": {
+        "type": "number"
+      },
+      "delivered": {
+        "type": "boolean"
+      }
+    },
+    "required": ["trackingNumber", "carrier", "weightKg", "delivered"]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "json_14",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nGrade record: Student Maya Lin scored 94.5 in Mathematics, received grade \"A\", passed: true.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"studentName\": \"Maya Lin\",\n  \"subject\": \"Mathematics\",\n  \"score\": 94.5,\n  \"letterGrade\": \"A\",\n  \"passed\": true\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "studentName": {
+        "type": "string"
+      },
+      "subject": {
+        "type": "string"
+      },
+      "score": {
+        "type": "number"
+      },
+      "letterGrade": {
+        "type": "string"
+      },
+      "passed": {
+        "type": "boolean"
+      }
+    },
+    "required": ["studentName", "subject", "score", "letterGrade", "passed"]
+  }
+}

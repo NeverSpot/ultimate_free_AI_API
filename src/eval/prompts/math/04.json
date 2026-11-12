@@ -1,0 +1,7 @@
+{
+  "id": "math_04",
+  "bucket": "math",
+  "prompt": "Evaluate: 14 + 6 * (8 - 3)^2.\nOutput only the final numerical answer.",
+  "referenceAnswer": "164",
+  "expected": 164
+}

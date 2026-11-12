@@ -1,0 +1,33 @@
+{
+  "id": "code_25",
+  "bucket": "code_generation",
+  "prompt": "Write a JavaScript function `deepEqual(a, b)` that returns true if two JSON-compatible values are deeply identical.\nOutput only the JavaScript code without extra commentary.",
+  "referenceAnswer": "function deepEqual(a, b) { return JSON.stringify(a) === JSON.stringify(b); }",
+  "entrypoint": "deepEqual",
+  "testCases": [
+    {
+      "input": [
+        {
+          "a": 1,
+          "b": [2, 3]
+        },
+        {
+          "a": 1,
+          "b": [2, 3]
+        }
+      ],
+      "expected": true
+    },
+    {
+      "input": [
+        {
+          "a": 1
+        },
+        {
+          "a": 2
+        }
+      ],
+      "expected": false
+    }
+  ]
+}

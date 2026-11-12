@@ -1,0 +1,27 @@
+{
+  "id": "json_15",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nSupport ticket TKT-802 from client dev@corp.io: Priority \"high\", subject \"API latency spike\", closed: false.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"ticketId\": \"TKT-802\",\n  \"customerEmail\": \"dev@corp.io\",\n  \"priority\": \"high\",\n  \"subject\": \"API latency spike\",\n  \"closed\": false\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "ticketId": {
+        "type": "string"
+      },
+      "customerEmail": {
+        "type": "string"
+      },
+      "priority": {
+        "type": "string"
+      },
+      "subject": {
+        "type": "string"
+      },
+      "closed": {
+        "type": "boolean"
+      }
+    },
+    "required": ["ticketId", "customerEmail", "priority", "subject", "closed"]
+  }
+}

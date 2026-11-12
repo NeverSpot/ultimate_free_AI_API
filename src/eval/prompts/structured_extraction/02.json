@@ -1,0 +1,12 @@
+{
+  "id": "struct_02",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: passenger, airline, flight_number, seat_number.\n\nRecord:\nBoarding Pass: Passenger Robert Langdon aboard Delta Airlines flight DL442 seated in 14B.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"passenger\": \"Robert Langdon\",\n  \"airline\": \"Delta Airlines\",\n  \"flight_number\": \"DL442\",\n  \"seat_number\": \"14B\"\n}",
+  "target": {
+    "passenger": "Robert Langdon",
+    "airline": "Delta Airlines",
+    "flight_number": "DL442",
+    "seat_number": "14B"
+  }
+}

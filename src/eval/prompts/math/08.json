@@ -1,0 +1,7 @@
+{
+  "id": "math_08",
+  "bucket": "math",
+  "prompt": "What is the greatest common divisor (GCD) of 72 and 120?\nOutput only the final numerical answer.",
+  "referenceAnswer": "24",
+  "expected": 24
+}

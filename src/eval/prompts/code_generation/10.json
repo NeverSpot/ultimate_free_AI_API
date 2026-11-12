@@ -1,0 +1,17 @@
+{
+  "id": "code_10",
+  "bucket": "code_generation",
+  "prompt": "Write a JavaScript function `capitalizeWords(str)` that capitalizes the first letter of each space-separated word.\nOutput only the JavaScript code without extra commentary.",
+  "referenceAnswer": "function capitalizeWords(str) { if (!str) return ''; return str.split(' ').map(w => w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : '').join(' '); }",
+  "entrypoint": "capitalizeWords",
+  "testCases": [
+    {
+      "input": ["hello world"],
+      "expected": "Hello World"
+    },
+    {
+      "input": ["gateway eval test"],
+      "expected": "Gateway Eval Test"
+    }
+  ]
+}

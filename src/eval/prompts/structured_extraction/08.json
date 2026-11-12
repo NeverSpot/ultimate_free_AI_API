@@ -1,0 +1,12 @@
+{
+  "id": "struct_08",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: guest_name, party_size, bill_subtotal, gratuity.\n\nRecord:\nRestaurant receipt for customer Bruce Wayne: party of 2, subtotal $180.00, gratuity $36.00.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"guest_name\": \"Bruce Wayne\",\n  \"party_size\": 2,\n  \"bill_subtotal\": 180,\n  \"gratuity\": 36\n}",
+  "target": {
+    "guest_name": "Bruce Wayne",
+    "party_size": 2,
+    "bill_subtotal": 180,
+    "gratuity": 36
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "code_06",
+  "bucket": "code_generation",
+  "prompt": "Write a JavaScript function `isPalindrome(str)` that returns true if the string is a palindrome (ignoring non-alphanumeric characters and case).\nOutput only the JavaScript code without extra commentary.",
+  "referenceAnswer": "function isPalindrome(str) { const clean = str.toLowerCase().replace(/[^a-z0-9]/g, ''); return clean === clean.split('').reverse().join(''); }",
+  "entrypoint": "isPalindrome",
+  "testCases": [
+    {
+      "input": ["Racecar"],
+      "expected": true
+    },
+    {
+      "input": ["A man, a plan, a canal: Panama"],
+      "expected": true
+    },
+    {
+      "input": ["hello"],
+      "expected": false
+    }
+  ]
+}

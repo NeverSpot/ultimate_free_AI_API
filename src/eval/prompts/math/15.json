@@ -1,0 +1,7 @@
+{
+  "id": "math_15",
+  "bucket": "math",
+  "prompt": "Find the arithmetic mean of 24, 38, 45, 52, and 61.\nOutput only the final numerical answer.",
+  "referenceAnswer": "44",
+  "expected": 44
+}

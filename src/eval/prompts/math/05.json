@@ -1,0 +1,7 @@
+{
+  "id": "math_05",
+  "bucket": "math",
+  "prompt": "What is 35% of 420?\nOutput only the final numerical answer.",
+  "referenceAnswer": "147",
+  "expected": 147
+}

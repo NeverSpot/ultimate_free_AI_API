@@ -1,0 +1,26 @@
+{
+  "id": "code_13",
+  "bucket": "code_generation",
+  "prompt": "Write a JavaScript function `flatten(arr)` that flattens an array of arrays by one level.\nOutput only the JavaScript code without extra commentary.",
+  "referenceAnswer": "function flatten(arr) { return [].concat(...arr); }",
+  "entrypoint": "flatten",
+  "testCases": [
+    {
+      "input": [
+        [
+          [1, 2],
+          [3, 4]
+        ]
+      ],
+      "expected": [1, 2, 3, 4]
+    },
+    {
+      "input": [[[1], [2], [3]]],
+      "expected": [1, 2, 3]
+    },
+    {
+      "input": [[]],
+      "expected": []
+    }
+  ]
+}

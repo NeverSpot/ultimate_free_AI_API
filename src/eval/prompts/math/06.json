@@ -1,0 +1,7 @@
+{
+  "id": "math_06",
+  "bucket": "math",
+  "prompt": "Calculate 2^11.\nOutput only the final numerical answer.",
+  "referenceAnswer": "2048",
+  "expected": 2048
+}

@@ -1,0 +1,7 @@
+{
+  "id": "math_23",
+  "bucket": "math",
+  "prompt": "What is the 10th prime number (starting with 2 as the 1st prime)?\nOutput only the final numerical answer.",
+  "referenceAnswer": "29",
+  "expected": 29
+}

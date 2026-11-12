@@ -1,0 +1,27 @@
+{
+  "id": "json_04",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nAddress: 742 Evergreen Terrace, Springfield, OR, 97477, USA.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"street\": \"742 Evergreen Terrace\",\n  \"city\": \"Springfield\",\n  \"state\": \"OR\",\n  \"postalCode\": \"97477\",\n  \"country\": \"USA\"\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "street": {
+        "type": "string"
+      },
+      "city": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string"
+      },
+      "postalCode": {
+        "type": "string"
+      },
+      "country": {
+        "type": "string"
+      }
+    },
+    "required": ["street", "city", "state", "postalCode", "country"]
+  }
+}

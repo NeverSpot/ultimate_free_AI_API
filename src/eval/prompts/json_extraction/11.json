@@ -1,0 +1,30 @@
+{
+  "id": "json_11",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nConference: \"Tech Summit 2026\" on 2026-10-15 at \"Moscone Center\", max capacity 5000, tags: [\"tech\", \"ai\", \"cloud\"].\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"title\": \"Tech Summit 2026\",\n  \"date\": \"2026-10-15\",\n  \"venue\": \"Moscone Center\",\n  \"capacity\": 5000,\n  \"tags\": [\n    \"tech\",\n    \"ai\",\n    \"cloud\"\n  ]\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string"
+      },
+      "date": {
+        "type": "string"
+      },
+      "venue": {
+        "type": "string"
+      },
+      "capacity": {
+        "type": "integer"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": ["title", "date", "venue", "capacity", "tags"]
+  }
+}

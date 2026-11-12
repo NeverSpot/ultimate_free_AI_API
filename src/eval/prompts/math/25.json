@@ -1,0 +1,7 @@
+{
+  "id": "math_25",
+  "bucket": "math",
+  "prompt": "In a right triangle with legs of length 9 and 12, what is the length of the hypotenuse?\nOutput only the final numerical answer.",
+  "referenceAnswer": "15",
+  "expected": 15
+}

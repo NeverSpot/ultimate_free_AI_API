@@ -1,0 +1,12 @@
+{
+  "id": "struct_23",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: podcast_name, episode_num, broadcast_date, age_restricted.\n\nRecord:\nPodcast episode: \"Hardcore History\", episode 68 released on 2026-04-01, age restricted: false.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"podcast_name\": \"Hardcore History\",\n  \"episode_num\": 68,\n  \"broadcast_date\": \"2026-04-01\",\n  \"age_restricted\": false\n}",
+  "target": {
+    "podcast_name": "Hardcore History",
+    "episode_num": 68,
+    "broadcast_date": "2026-04-01",
+    "age_restricted": false
+  }
+}

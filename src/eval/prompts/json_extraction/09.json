@@ -1,0 +1,24 @@
+{
+  "id": "json_09",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nTransaction TXN-4491 processed an amount of 149.50 USD with successful status (true).\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"transactionId\": \"TXN-4491\",\n  \"amount\": 149.5,\n  \"currency\": \"USD\",\n  \"isSuccess\": true\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "transactionId": {
+        "type": "string"
+      },
+      "amount": {
+        "type": "number"
+      },
+      "currency": {
+        "type": "string"
+      },
+      "isSuccess": {
+        "type": "boolean"
+      }
+    },
+    "required": ["transactionId", "amount", "currency", "isSuccess"]
+  }
+}

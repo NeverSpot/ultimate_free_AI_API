@@ -1,0 +1,25 @@
+{
+  "id": "json_05",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nFlight: Flight AA-102 departing JFK for LHR with a total duration of 420 minutes.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"flightNumber\": \"AA-102\",\n  \"departureAirport\": \"JFK\",\n  \"arrivalAirport\": \"LHR\",\n  \"durationMinutes\": 420\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "flightNumber": {
+        "type": "string"
+      },
+      "departureAirport": {
+        "type": "string"
+      },
+      "arrivalAirport": {
+        "type": "string"
+      },
+      "durationMinutes": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "required": ["flightNumber", "departureAirport", "arrivalAirport", "durationMinutes"]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "struct_24",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: ordering_officer, po_identifier, total_quantity, net_cost.\n\nRecord:\nProcurement PO-6612 issued by Officer James Gordon for quantity 150 items with total cost $3750.00.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"ordering_officer\": \"James Gordon\",\n  \"po_identifier\": \"PO-6612\",\n  \"total_quantity\": 150,\n  \"net_cost\": 3750\n}",
+  "target": {
+    "ordering_officer": "James Gordon",
+    "po_identifier": "PO-6612",
+    "total_quantity": 150,
+    "net_cost": 3750
+  }
+}

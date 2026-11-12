@@ -1,0 +1,24 @@
+{
+  "id": "json_21",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nAccount details: Account ACCT-8921 is a \"Checking\" account with balance 4520.75 USD.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"accountNumber\": \"ACCT-8921\",\n  \"accountType\": \"Checking\",\n  \"currentBalance\": 4520.75,\n  \"currency\": \"USD\"\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "accountNumber": {
+        "type": "string"
+      },
+      "accountType": {
+        "type": "string"
+      },
+      "currentBalance": {
+        "type": "number"
+      },
+      "currency": {
+        "type": "string"
+      }
+    },
+    "required": ["accountNumber", "accountType", "currentBalance", "currency"]
+  }
+}

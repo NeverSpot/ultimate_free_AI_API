@@ -1,0 +1,12 @@
+{
+  "id": "struct_18",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: event_venue, performer, seating_section, admission_cost.\n\nRecord:\nConcert pass: Red Rocks venue hosting Daft Punk in Section VIP at price $250.00.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"event_venue\": \"Red Rocks\",\n  \"performer\": \"Daft Punk\",\n  \"seating_section\": \"VIP\",\n  \"admission_cost\": 250\n}",
+  "target": {
+    "event_venue": "Red Rocks",
+    "performer": "Daft Punk",
+    "seating_section": "VIP",
+    "admission_cost": 250
+  }
+}

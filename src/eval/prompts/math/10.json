@@ -1,0 +1,7 @@
+{
+  "id": "math_10",
+  "bucket": "math",
+  "prompt": "Solve for x: 5x - 17 = 78. What is the value of x?\nOutput only the final numerical answer.",
+  "referenceAnswer": "19",
+  "expected": 19
+}

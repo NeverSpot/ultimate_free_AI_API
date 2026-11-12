@@ -1,0 +1,30 @@
+{
+  "id": "json_17",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nInvoice INV-2026-09 for Acme Corp due 2026-11-30: Subtotal 1000.00, Tax 85.00, Total 1085.00.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"invoiceNumber\": \"INV-2026-09\",\n  \"clientName\": \"Acme Corp\",\n  \"dueDate\": \"2026-11-30\",\n  \"subtotal\": 1000,\n  \"tax\": 85,\n  \"total\": 1085\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "invoiceNumber": {
+        "type": "string"
+      },
+      "clientName": {
+        "type": "string"
+      },
+      "dueDate": {
+        "type": "string"
+      },
+      "subtotal": {
+        "type": "number"
+      },
+      "tax": {
+        "type": "number"
+      },
+      "total": {
+        "type": "number"
+      }
+    },
+    "required": ["invoiceNumber", "clientName", "dueDate", "subtotal", "tax", "total"]
+  }
+}

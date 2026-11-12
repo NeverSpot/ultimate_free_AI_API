@@ -16,6 +16,7 @@
     "test": "node --import tsx --test",
     "test:int": "node --import tsx --test test/integration/**/*.test.ts",
     "test:watch": "node --import tsx --test --watch",
+    "eval": "node --import tsx src/eval/run.ts",
     "lint": "eslint . --cache --max-warnings=0",
     "lint:fix": "eslint . --cache --fix",
     "format": "prettier --write .",

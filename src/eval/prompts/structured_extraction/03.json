@@ -1,0 +1,12 @@
+{
+  "id": "struct_03",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: patient_name, test_type, test_value, normal_range.\n\nRecord:\nDiagnostic report for patient Emily Watson: Test Glucose measured at 98.4 with normal range 70-99.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"patient_name\": \"Emily Watson\",\n  \"test_type\": \"Glucose\",\n  \"test_value\": 98.4,\n  \"normal_range\": \"70-99\"\n}",
+  "target": {
+    "patient_name": "Emily Watson",
+    "test_type": "Glucose",
+    "test_value": 98.4,
+    "normal_range": "70-99"
+  }
+}

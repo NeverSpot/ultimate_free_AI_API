@@ -1,0 +1,7 @@
+{
+  "id": "math_11",
+  "bucket": "math",
+  "prompt": "Find the larger positive root of x^2 - 11x + 28 = 0.\nOutput only the final numerical answer.",
+  "referenceAnswer": "7",
+  "expected": 7
+}

@@ -1,0 +1,12 @@
+{
+  "id": "struct_11",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: guest_full_name, room_number, total_nights, total_charged.\n\nRecord:\nHotel departure folio: Guest Clara Oswald in room 404 stayed 5 nights with final charge $1125.00.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"guest_full_name\": \"Clara Oswald\",\n  \"room_number\": 404,\n  \"total_nights\": 5,\n  \"total_charged\": 1125\n}",
+  "target": {
+    "guest_full_name": "Clara Oswald",
+    "room_number": 404,
+    "total_nights": 5,
+    "total_charged": 1125
+  }
+}

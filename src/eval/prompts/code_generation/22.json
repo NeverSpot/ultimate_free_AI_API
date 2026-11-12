@@ -1,0 +1,37 @@
+{
+  "id": "code_22",
+  "bucket": "code_generation",
+  "prompt": "Write a JavaScript function `mergeObjects(obj1, obj2)` that returns a new object with obj2 properties overriding obj1.\nOutput only the JavaScript code without extra commentary.",
+  "referenceAnswer": "function mergeObjects(obj1, obj2) { return Object.assign({}, obj1, obj2); }",
+  "entrypoint": "mergeObjects",
+  "testCases": [
+    {
+      "input": [
+        {
+          "a": 1,
+          "b": 2
+        },
+        {
+          "b": 3,
+          "c": 4
+        }
+      ],
+      "expected": {
+        "a": 1,
+        "b": 3,
+        "c": 4
+      }
+    },
+    {
+      "input": [
+        {
+          "x": 10
+        },
+        {}
+      ],
+      "expected": {
+        "x": 10
+      }
+    }
+  ]
+}

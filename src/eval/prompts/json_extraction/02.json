@@ -1,0 +1,27 @@
+{
+  "id": "json_02",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nBook entry: \"Dune\" was authored by Frank Herbert in 1965. Genres include \"Sci-Fi\" and \"Adventure\".\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"title\": \"Dune\",\n  \"author\": \"Frank Herbert\",\n  \"publicationYear\": 1965,\n  \"genres\": [\n    \"Sci-Fi\",\n    \"Adventure\"\n  ]\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string"
+      },
+      "author": {
+        "type": "string"
+      },
+      "publicationYear": {
+        "type": "integer"
+      },
+      "genres": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": ["title", "author", "publicationYear", "genres"]
+  }
+}

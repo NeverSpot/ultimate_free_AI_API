@@ -1,0 +1,7 @@
+{
+  "id": "math_14",
+  "bucket": "math",
+  "prompt": "A circle has radius 14. Using pi = 22/7, calculate the area.\nOutput only the final numerical answer.",
+  "referenceAnswer": "616",
+  "expected": 616
+}

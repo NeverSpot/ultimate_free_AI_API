@@ -1,0 +1,12 @@
+{
+  "id": "struct_22",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: patient_id, blood_pressure_systolic, blood_pressure_diastolic, heart_rate_bpm.\n\nRecord:\nPatient vitals for ID PAT-909: Blood pressure 120 systolic over 80 diastolic with heart rate 72 bpm.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"patient_id\": \"PAT-909\",\n  \"blood_pressure_systolic\": 120,\n  \"blood_pressure_diastolic\": 80,\n  \"heart_rate_bpm\": 72\n}",
+  "target": {
+    "patient_id": "PAT-909",
+    "blood_pressure_systolic": 120,
+    "blood_pressure_diastolic": 80,
+    "heart_rate_bpm": 72
+  }
+}

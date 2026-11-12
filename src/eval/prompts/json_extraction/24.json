@@ -1,0 +1,24 @@
+{
+  "id": "json_24",
+  "bucket": "json_extraction",
+  "prompt": "Extract the requested data from the following text as a JSON object adhering to the schema:\n\nJob vacancy: \"Staff Backend Engineer\" at Stripe, remote: true, required experience: 7 years.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"jobTitle\": \"Staff Backend Engineer\",\n  \"company\": \"Stripe\",\n  \"remote\": true,\n  \"experienceYears\": 7\n}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "jobTitle": {
+        "type": "string"
+      },
+      "company": {
+        "type": "string"
+      },
+      "remote": {
+        "type": "boolean"
+      },
+      "experienceYears": {
+        "type": "integer"
+      }
+    },
+    "required": ["jobTitle", "company", "remote", "experienceYears"]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "code_03",
+  "bucket": "code_generation",
+  "prompt": "Write a JavaScript function `reverseString(str)` that returns the string reversed.\nOutput only the JavaScript code without extra commentary.",
+  "referenceAnswer": "function reverseString(str) { return str.split('').reverse().join(''); }",
+  "entrypoint": "reverseString",
+  "testCases": [
+    {
+      "input": ["hello"],
+      "expected": "olleh"
+    },
+    {
+      "input": ["world"],
+      "expected": "dlrow"
+    },
+    {
+      "input": [""],
+      "expected": ""
+    }
+  ]
+}

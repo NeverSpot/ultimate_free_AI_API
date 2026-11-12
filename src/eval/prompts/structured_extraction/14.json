@@ -1,0 +1,12 @@
+{
+  "id": "struct_14",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: course_code, faculty_department, credit_hours, lead_instructor.\n\nRecord:\nAcademic catalog: CS301 offered by Computer Science carries 4 credits taught by Prof. Knuth.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"course_code\": \"CS301\",\n  \"faculty_department\": \"Computer Science\",\n  \"credit_hours\": 4,\n  \"lead_instructor\": \"Prof. Knuth\"\n}",
+  "target": {
+    "course_code": "CS301",
+    "faculty_department": "Computer Science",
+    "credit_hours": 4,
+    "lead_instructor": "Prof. Knuth"
+  }
+}

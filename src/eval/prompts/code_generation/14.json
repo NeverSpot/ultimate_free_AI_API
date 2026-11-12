@@ -1,0 +1,17 @@
+{
+  "id": "code_14",
+  "bucket": "code_generation",
+  "prompt": "Write a JavaScript function `removeDuplicates(arr)` that removes duplicate values preserving their first occurrence order.\nOutput only the JavaScript code without extra commentary.",
+  "referenceAnswer": "function removeDuplicates(arr) { return Array.from(new Set(arr)); }",
+  "entrypoint": "removeDuplicates",
+  "testCases": [
+    {
+      "input": [[1, 2, 2, 3, 4, 4, 5]],
+      "expected": [1, 2, 3, 4, 5]
+    },
+    {
+      "input": [["a", "b", "a"]],
+      "expected": ["a", "b"]
+    }
+  ]
+}

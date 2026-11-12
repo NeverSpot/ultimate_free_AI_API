@@ -1,0 +1,12 @@
+{
+  "id": "struct_21",
+  "bucket": "structured_extraction",
+  "prompt": "Extract key fields from the following record as a JSON object with keys: organization, software_suite, subscription_tier, user_licenses.\n\nRecord:\nEnterprise software agreement: Organization Wayne Enterprises licensed Enterprise tier for 500 users of SecurityGuard.\n\nOutput only valid JSON.",
+  "referenceAnswer": "{\n  \"organization\": \"Wayne Enterprises\",\n  \"software_suite\": \"SecurityGuard\",\n  \"subscription_tier\": \"Enterprise\",\n  \"user_licenses\": 500\n}",
+  "target": {
+    "organization": "Wayne Enterprises",
+    "software_suite": "SecurityGuard",
+    "subscription_tier": "Enterprise",
+    "user_licenses": 500
+  }
+}

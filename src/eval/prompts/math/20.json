@@ -1,0 +1,7 @@
+{
+  "id": "math_20",
+  "bucket": "math",
+  "prompt": "Evaluate permutations P(6, 2) = 6! / (6 - 2)!.\nOutput only the final numerical answer.",
+  "referenceAnswer": "30",
+  "expected": 30
+}
