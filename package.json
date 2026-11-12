@@ -22,6 +22,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "verify": "npm run -s typecheck && npm run -s lint && npm run -s format:check && npm run -s test",
+    "load": "node --import tsx load/run.ts",
+    "load:ci": "node --import tsx load/run.ts --env ci",
+    "mock:upstream": "node --import tsx load/mock-upstream.ts",
+    "mock:down": "node --import tsx load/mock-down.ts",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
@@ -30,6 +34,7 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.19.2",
     "@types/pg": "^8.23.1",
+    "artillery": "^2.0.34",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.9.10",
