@@ -34,3 +34,6 @@ coverage/
 artifacts/*
 !artifacts/.gitkeep
 tmp/
+*.pid
+load/dist/
+.agents/

@@ -1,0 +1,80 @@
+config:
+  target: 'http://127.0.0.1:8080'
+  environments:
+    local:
+      target: 'http://127.0.0.1:8080'
+    ci:
+      target: 'http://gateway:8080'
+  phases:
+    - name: 'warmup'
+      duration: 60
+      arrivalRate: 10
+    - name: 'ramp'
+      duration: 120
+      arrivalRate: 10
+      rampTo: 300
+    - name: 'sustain'
+      duration: 300
+      arrivalRate: 300
+    - name: 'spike'
+      duration: 60
+      arrivalRate: 500
+      rampTo: 1000
+  plugins:
+    ensure: {}
+    apdex: {}
+  ensure:
+    thresholds:
+      - 'http.response_time.p99 < 500'
+      - 'http.codes.429 < 1'
+      - 'apdex.score > 0.95'
+  processor: './processor.ts'
+  http:
+    timeout: 30
+    headers:
+      Authorization: 'Bearer dummy-token'
+
+scenarios:
+  - name: 'buffered chat completion'
+    flowFile: './load/scenarios/chat-buffered.yml'
+    flow:
+      - think: 1
+      - post:
+          url: '/v1/chat/completions'
+          headers:
+            Authorization: 'Bearer dummy-token'
+          beforeRequest: 'setLogNormalPrompt'
+          afterResponse: 'recordOverhead'
+          json:
+            model: 'gpt-4o-mini'
+            messages:
+              - role: 'user'
+                content: '{{ $randomString(100, 2000) }}'
+            stream: false
+          capture:
+            - json: '$.usage.total_tokens'
+              as: 'totalTokens'
+          expect:
+            - statusCode: 200
+  - name: 'streamed chat completion'
+    flowFile: './load/scenarios/chat-stream.yml'
+    flow:
+      - think: 1
+      - post:
+          url: '/v1/chat/completions'
+          headers:
+            Authorization: 'Bearer dummy-token'
+          beforeRequest: 'setLogNormalPrompt'
+          afterResponse: 'recordOverhead'
+          json:
+            model: 'gpt-4o-mini'
+            messages:
+              - role: 'user'
+                content: '{{ $randomString(100, 2000) }}'
+            stream: true
+          expect:
+            - statusCode: 200
+            - hasHeader: 'content-type'
+          capture:
+            - regexp: 'data: (.+)'
+              as: 'firstChunk'
