@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ProviderError } from '../../core/errors';
+import { newRequestId } from '../../core/ids';
 import {
   type AdapterMapEntry,
   type Candidate,
@@ -232,15 +233,16 @@ export function registerChatCompletions(
           throw err;
         }
 
-        const requestId = req.gatewayRequestId;
+        const requestId = req.gatewayRequestId ?? newRequestId();
         const providerId = meta?.providerId ?? deps.provider.id;
         const model = meta?.modelId ?? canonical.model ?? providerId;
         const attempts = meta?.attempts ?? 1;
         const latencyMs = Math.max(0, now() - startedAt);
 
+        const sseHeadersEnabled = deps.config?.sseHeadersEnabled !== false;
         const streamHeaders: Record<string, string> = {
           'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
+          'Cache-Control': sseHeadersEnabled ? 'no-cache, no-transform' : 'no-cache',
           Connection: 'keep-alive',
           'x-request-id': requestId,
           'x-gateway-provider': providerId,
@@ -248,6 +250,11 @@ export function registerChatCompletions(
           'x-gateway-attempts': String(attempts),
           'x-gateway-latency-ms': String(latencyMs),
         };
+
+        if (sseHeadersEnabled) {
+          streamHeaders['X-Accel-Buffering'] = 'no';
+          streamHeaders['Content-Encoding'] = 'none';
+        }
 
         reply.hijack();
         reply.raw.writeHead(200, streamHeaders);
@@ -275,10 +282,40 @@ export function registerChatCompletions(
           return;
         }
 
+        const keepaliveIntervalMs = deps.keepaliveIntervalMs ?? 15_000;
+        let lastWriteTime = (deps.now ?? Date.now)();
+        let keepaliveTimer: NodeJS.Timeout | undefined;
+
         try {
           const firstChunkStr = formatSseChunk(firstItem.value, requestId, model);
           recordedChunks.push(firstChunkStr);
           await writeWithBackpressure(reply.raw, firstChunkStr, clientController.signal);
+          lastWriteTime = (deps.now ?? Date.now)();
+
+          if (keepaliveIntervalMs > 0) {
+            keepaliveTimer = setInterval(
+              () => {
+                if (
+                  clientController.signal.aborted ||
+                  reply.raw.writableEnded ||
+                  reply.raw.destroyed
+                ) {
+                  if (keepaliveTimer !== undefined) {
+                    clearInterval(keepaliveTimer);
+                    keepaliveTimer = undefined;
+                  }
+                  return;
+                }
+                const current = (deps.now ?? Date.now)();
+                if (current - lastWriteTime >= keepaliveIntervalMs) {
+                  reply.raw.write(': keepalive\n\n');
+                  lastWriteTime = current;
+                }
+              },
+              Math.min(keepaliveIntervalMs, 1000),
+            );
+            keepaliveTimer.unref?.();
+          }
 
           while (true) {
             if (clientController.signal.aborted) break;
@@ -287,6 +324,7 @@ export function registerChatCompletions(
             const chunkStr = formatSseChunk(nextItem.value, requestId, model);
             recordedChunks.push(chunkStr);
             const ok = await writeWithBackpressure(reply.raw, chunkStr, clientController.signal);
+            lastWriteTime = (deps.now ?? Date.now)();
             if (!ok) break;
           }
 
@@ -314,6 +352,10 @@ export function registerChatCompletions(
             reply.raw.end();
           }
         } finally {
+          if (keepaliveTimer !== undefined) {
+            clearInterval(keepaliveTimer);
+            keepaliveTimer = undefined;
+          }
           req.raw.off('close', onClientClose);
           if (idempotencyContext && !idempotencyContext.completed) {
             await idempotencyService
@@ -369,7 +411,7 @@ export function registerChatCompletions(
           throw err;
         }
 
-        const requestId = req.gatewayRequestId;
+        const requestId = req.gatewayRequestId ?? newRequestId();
         const providerId = meta?.providerId ?? deps.provider.id;
         const model = response.model || meta?.modelId || canonical.model || providerId;
         const attempts = meta?.attempts ?? 1;

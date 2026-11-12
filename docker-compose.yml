@@ -50,6 +50,7 @@ services:
       - PORT=${PORT:-8080}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - NODE_ENV=production
+      - SSE_HEADERS_ENABLED=true
     ports:
       - '${PORT:-8080}:8080'
     healthcheck:
@@ -64,6 +65,24 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    profiles: ['app']
+    depends_on:
+      gateway:
+        condition: service_healthy
+    ports:
+      - '${NGINX_PORT:-80}:80'
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 
 volumes:

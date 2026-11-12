@@ -43,6 +43,7 @@ export interface ChatRouterDeps {
   evalTable?: EvalTable;
   lru?: LruMap;
   maxAttempts?: number;
+  keepaliveIntervalMs?: number;
 }
 
 export class RouterRuntime {

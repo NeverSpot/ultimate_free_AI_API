@@ -386,17 +386,27 @@ interface CliOptions {
   providers?: ProviderId[];
   model?: string;
   timeoutMs?: number;
+  stream?: boolean;
   error?: string;
 }
 
-function parseArgs(argv: readonly string[], env: NodeJS.ProcessEnv = process.env): CliOptions {
+export function parseArgs(
+  argv: readonly string[],
+  env: NodeJS.ProcessEnv = process.env,
+): CliOptions {
   let provider: string | undefined;
   let model: string | undefined;
   let timeoutMs: number | undefined;
+  let stream: boolean | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === undefined) {
+      continue;
+    }
+
+    if (arg === '--stream') {
+      stream = true;
       continue;
     }
 
@@ -440,7 +450,132 @@ function parseArgs(argv: readonly string[], env: NodeJS.ProcessEnv = process.env
     providers: provider === undefined ? undefined : [provider],
     model,
     timeoutMs,
+    stream,
   };
+}
+
+export interface RunStreamSmokeOptions {
+  url?: string;
+  adminToken?: string;
+  model?: string;
+  timeoutMs?: number;
+  write?: (line: string) => void;
+  fetch?: typeof fetch;
+}
+
+export async function runStreamSmoke(options: RunStreamSmokeOptions = {}): Promise<number> {
+  const write = options.write ?? ((line: string) => console.log(line));
+  const nginxPort = process.env.NGINX_PORT || '80';
+  const rawUrl =
+    options.url ||
+    process.env.STREAM_GATEWAY_URL ||
+    `http://127.0.0.1:${nginxPort}/v1/chat/completions`;
+  const adminToken = options.adminToken || process.env.ADMIN_TOKEN || 'dummy-token';
+  const model = options.model || 'mock-model';
+  const timeoutMs = options.timeoutMs ?? 15_000;
+  const fetchImpl = options.fetch ?? fetch;
+
+  write(`smoke stream: connecting to ${rawUrl}...`);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const startedAt = Date.now();
+    const res = await fetchImpl(rawUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: 'Ping from smoke --stream' }],
+        stream: true,
+      }),
+      signal: controller.signal,
+    });
+
+    if (res.status !== 200) {
+      const errorText = await res.text().catch(() => '');
+      write(`smoke stream: FAILED - HTTP ${res.status}: ${errorText}`);
+      return 1;
+    }
+
+    const contentType = res.headers.get('content-type') ?? '';
+    const cacheControl = res.headers.get('cache-control') ?? '';
+    const xAccelBuffering = res.headers.get('x-accel-buffering') ?? '';
+    const contentEncoding = res.headers.get('content-encoding') ?? '';
+
+    const headerProblems: string[] = [];
+    if (!contentType.includes('text/event-stream')) {
+      headerProblems.push(`content-type must include "text/event-stream" (got "${contentType}")`);
+    }
+    if (!cacheControl.includes('no-cache')) {
+      headerProblems.push(`cache-control must include "no-cache" (got "${cacheControl}")`);
+    }
+    if (!cacheControl.includes('no-transform')) {
+      headerProblems.push(`cache-control must include "no-transform" (got "${cacheControl}")`);
+    }
+    if (xAccelBuffering.toLowerCase() !== 'no') {
+      headerProblems.push(`x-accel-buffering must be "no" (got "${xAccelBuffering}")`);
+    }
+    if (contentEncoding !== '' && contentEncoding.toLowerCase() !== 'none') {
+      headerProblems.push(
+        `content-encoding must be none/absent, not compressed (got "${contentEncoding}")`,
+      );
+    }
+
+    if (headerProblems.length > 0) {
+      write(
+        `smoke stream: FAILED - Header validation:\n${headerProblems.map((p) => `  - ${p}`).join('\n')}`,
+      );
+      return 1;
+    }
+
+    let chunkCount = 0;
+    let receivedDone = false;
+    let firstChunkMs = 0;
+
+    if (res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (chunkCount === 0) {
+          firstChunkMs = Math.max(0, Date.now() - startedAt);
+        }
+        chunkCount += 1;
+        const text = decoder.decode(value, { stream: true });
+        if (text.includes('[DONE]')) {
+          receivedDone = true;
+        }
+      }
+    }
+
+    if (chunkCount === 0) {
+      write('smoke stream: FAILED - No stream chunks received');
+      return 1;
+    }
+
+    if (!receivedDone) {
+      write('smoke stream: FAILED - Stream did not complete with [DONE]');
+      return 1;
+    }
+
+    const totalElapsedMs = Math.max(0, Date.now() - startedAt);
+    write(
+      `smoke stream: OK (${chunkCount} chunks, TTFT ${firstChunkMs}ms, total ${totalElapsedMs}ms, headers verified: Cache-Control: ${cacheControl}; X-Accel-Buffering: ${xAccelBuffering}; Content-Encoding: ${contentEncoding || 'none'})`,
+    );
+    return 0;
+  } catch (error) {
+    write(`smoke stream: FAILED - ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function main(): Promise<void> {
@@ -448,6 +583,16 @@ async function main(): Promise<void> {
   if (parsed.error !== undefined) {
     console.error(`smoke: ${parsed.error}`);
     process.exitCode = 1;
+    return;
+  }
+
+  if (parsed.stream) {
+    const exitCode = await runStreamSmoke({
+      model: parsed.model,
+      timeoutMs: parsed.timeoutMs,
+      write: (line) => console.log(line),
+    });
+    process.exitCode = exitCode;
     return;
   }
 

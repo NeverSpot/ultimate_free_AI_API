@@ -498,3 +498,96 @@ test('executeStream: onFirstChunk fires when the first chunk is obtained', async
   assert.ok(completedMeta !== undefined, 'onComplete should have fired');
   assert.equal(completedMeta?.providerId, 'mock');
 });
+
+// ---------------------------------------------------------------------------
+// 9. Streaming response headers: Cache-Control, X-Accel-Buffering, Content-Encoding
+// ---------------------------------------------------------------------------
+
+test('SSE response headers: sets no-cache, no-transform, X-Accel-Buffering, Content-Encoding', async (t) => {
+  const config: Config = {
+    port: 0,
+    adminToken: 'test-token',
+    maxBodyBytes: 1_048_576,
+    attemptTimeoutMs: 5000,
+    requestDeadlineMs: 10000,
+    logLevel: 'silent',
+    nodeEnv: 'test',
+  };
+  const provider = new MockProviderAdapter({ id: 'mock', model: 'mock-model', content: 'test' });
+  const credential = makeCred('c1');
+
+  const app = Fastify({ logger: false });
+  app.decorateRequest('gatewayRequestId', 'req-sse-hdr');
+  registerChatCompletions(app, { config, provider, credential });
+  t.after(async () => app.close());
+
+  const res = await app.inject({
+    method: 'POST',
+    url: '/v1/chat/completions',
+    headers: {
+      authorization: 'Bearer test-token',
+      'content-type': 'application/json',
+    },
+    payload: {
+      model: 'mock-model',
+      messages: [{ role: 'user', content: 'hello' }],
+      stream: true,
+    },
+  });
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers['content-type'], 'text/event-stream');
+  assert.equal(res.headers['cache-control'], 'no-cache, no-transform');
+  assert.equal(res.headers['x-accel-buffering'], 'no');
+  assert.equal(res.headers['content-encoding'], 'none');
+});
+
+// ---------------------------------------------------------------------------
+// 10. SSE keepalive: emits : keepalive\n\n during silence
+// ---------------------------------------------------------------------------
+
+test('SSE keepalive: emits : keepalive\\n\\n comment during stream silence', async (t) => {
+  const config: Config = {
+    port: 0,
+    adminToken: 'test-token',
+    maxBodyBytes: 1_048_576,
+    attemptTimeoutMs: 5000,
+    requestDeadlineMs: 10000,
+    logLevel: 'silent',
+    nodeEnv: 'test',
+  };
+  const provider = new MockProviderAdapter({
+    id: 'mock',
+    model: 'mock-model',
+    content: 'hello world from keepalive test',
+    chunkDelayMs: 60,
+  });
+  const credential = makeCred('c1');
+
+  const app = Fastify({ logger: false });
+  app.decorateRequest('gatewayRequestId', 'req-sse-keepalive');
+  registerChatCompletions(app, {
+    config,
+    provider,
+    credential,
+    keepaliveIntervalMs: 20,
+  });
+  t.after(async () => app.close());
+
+  const res = await app.inject({
+    method: 'POST',
+    url: '/v1/chat/completions',
+    headers: {
+      authorization: 'Bearer test-token',
+      'content-type': 'application/json',
+    },
+    payload: {
+      model: 'mock-model',
+      messages: [{ role: 'user', content: 'hello' }],
+      stream: true,
+    },
+  });
+
+  assert.equal(res.statusCode, 200);
+  assert.match(res.body, /: keepalive\n\n/, 'body should contain keepalive comment');
+});

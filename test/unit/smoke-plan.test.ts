@@ -10,7 +10,9 @@ import {
   formatTable,
   DEFAULT_MODEL,
   DEFAULT_TIMEOUT_MS,
+  parseArgs,
   runSmoke,
+  runStreamSmoke,
 } from '../../scripts/smoke';
 import type { SmokeRow } from '../../scripts/smoke';
 
@@ -583,4 +585,74 @@ test('smoke plan: a hung provider is reported as a timeout failure', async () =>
 
   assert.equal(code, 1);
   assert.ok(output.lines.some((line) => line.includes('FAILED timeout')));
+});
+
+test('smoke plan: parseArgs recognizes --stream', () => {
+  const parsed = parseArgs(['--stream']);
+  assert.equal(parsed.stream, true);
+  assert.equal(parsed.error, undefined);
+});
+
+test('smoke plan: runStreamSmoke succeeds when streaming endpoint returns valid headers and chunks', async () => {
+  const chunks = ['data: {"choices":[{"delta":{"content":"Hi"}}]}\n\n', 'data: [DONE]\n\n'];
+  let chunkIdx = 0;
+
+  const headers = new Map([
+    ['content-type', 'text/event-stream'],
+    ['cache-control', 'no-cache, no-transform'],
+    ['x-accel-buffering', 'no'],
+    ['content-encoding', 'none'],
+  ]);
+
+  const mockResponse = {
+    status: 200,
+    headers: {
+      get: (key: string) => headers.get(key.toLowerCase()) ?? null,
+    },
+    body: {
+      getReader: () => ({
+        read: async () => {
+          if (chunkIdx < chunks.length) {
+            const val = new TextEncoder().encode(chunks[chunkIdx++]);
+            return { value: val, done: false };
+          }
+          return { value: undefined, done: true };
+        },
+      }),
+    },
+  };
+
+  const output: string[] = [];
+  const fakeFetch = (async () => mockResponse) as unknown as typeof fetch;
+
+  const code = await runStreamSmoke({
+    fetch: fakeFetch,
+    write: (line) => output.push(line),
+  });
+
+  assert.equal(code, 0);
+  assert.ok(output.some((line) => line.includes('smoke stream: OK')));
+});
+
+test('smoke plan: runStreamSmoke fails when headers are missing or invalid', async () => {
+  const headers = new Map([['content-type', 'application/json']]);
+
+  const mockResponse = {
+    status: 200,
+    headers: {
+      get: (key: string) => headers.get(key.toLowerCase()) ?? null,
+    },
+    body: null,
+  };
+
+  const output: string[] = [];
+  const fakeFetch = (async () => mockResponse) as unknown as typeof fetch;
+
+  const code = await runStreamSmoke({
+    fetch: fakeFetch,
+    write: (line) => output.push(line),
+  });
+
+  assert.equal(code, 1);
+  assert.ok(output.some((line) => line.includes('Header validation')));
 });
