@@ -11,6 +11,8 @@ import { registerAuthRoutes } from './routes/auth';
 import { registerUserKeyRoutes } from './routes/user-keys';
 import traceIdPlugin from './middleware/trace-id';
 import metricsRoute from './routes/metrics';
+import cacheMiddleware from './middleware/cache-middleware';
+import { registerProvidersRoute } from './routes/providers';
 import type { createGatewayKeyAuth } from './middleware/gateway-key-auth';
 import type { UserModel } from '../models/user';
 import type { UserProviderKeyModel } from '../models/user-provider-key';
@@ -110,6 +112,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       );
   });
 
+  // Block 29: cache middleware wraps POST /v1/chat/completions as a preHandler
+  // hook, so it is wired before the routes it intercepts.
+  cacheMiddleware(app);
+
   const gatewayKeyAuth = deps.gatewayKeyAuth;
   if (gatewayKeyAuth) {
     app.addHook('onRequest', async (request, _reply) => {
@@ -141,6 +147,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     await app.close();
     process.exit(0);
   });
+
+  // Block 30: provider health endpoint at GET /v1/providers/health.
+  registerProvidersRoute(app);
 
   return app;
 }

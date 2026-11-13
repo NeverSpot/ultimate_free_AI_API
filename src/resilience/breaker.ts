@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { healthTracker } from '../providers/health';
 
 /** The only three states the breaker may occupy. */
 export type BreakerState = 'closed' | 'open' | 'half_open';
@@ -85,6 +86,15 @@ export function breakerKey(target: BreakerTarget): string {
 /** The sliding failure window for that target. */
 export function breakerFailureKey(target: BreakerTarget): string {
   return `${breakerKey(target)}:f`;
+}
+
+/**
+ * A provider is unhealthy once it has accumulated a sustained run of failures
+ * (see `providers/health`). `src/core/execute` removes unhealthy providers
+ * from routing candidates before selection.
+ */
+export function isUnhealthy(provider: string): boolean {
+  return healthTracker.health(provider) === 'unhealthy';
 }
 
 /**
