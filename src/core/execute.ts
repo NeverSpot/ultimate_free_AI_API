@@ -5,6 +5,7 @@ import { ProviderError, type ErrorKind } from './errors';
 import { createLedger, type Ledger, type Reservation } from '../limits/ledger';
 import {
   createBreaker,
+  isUnhealthy,
   type Breaker,
   type BreakerClient,
   type BreakerTarget,
@@ -209,12 +210,16 @@ export async function execute(
   const deadlineMs = startMs + totalDeadlineMs;
   const bucket = taskBucket ?? classifyTaskBucket(request);
 
-  const ranked = select(candidates, ledgerSnapshot, {
-    evalTable,
-    taskBucket: bucket,
-    lru,
-    limit: 0,
-  });
+  const ranked = select(
+    candidates.filter((candidate) => !isUnhealthy(candidate.providerId)),
+    ledgerSnapshot,
+    {
+      evalTable,
+      taskBucket: bucket,
+      lru,
+      limit: 0,
+    },
+  );
 
   let attempts = 0;
   let lastError: ProviderError | undefined;
@@ -518,12 +523,16 @@ export async function* executeStream(
   const deadlineMs = startMs + totalDeadlineMs;
   const bucket = taskBucket ?? classifyTaskBucket(request);
 
-  const ranked = select(candidates, ledgerSnapshot, {
-    evalTable,
-    taskBucket: bucket,
-    lru,
-    limit: 0,
-  });
+  const ranked = select(
+    candidates.filter((candidate) => !isUnhealthy(candidate.providerId)),
+    ledgerSnapshot,
+    {
+      evalTable,
+      taskBucket: bucket,
+      lru,
+      limit: 0,
+    },
+  );
 
   let attempts = 0;
   let lastError: ProviderError | undefined;
