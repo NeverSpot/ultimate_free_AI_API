@@ -8,9 +8,11 @@ export interface Config {
   logLevel: string;
   nodeEnv: string;
   sseHeadersEnabled?: boolean;
+  corsOrigin?: string;
 }
 
 const DEFAULT_PORT = 8080;
+export const DEFAULT_CORS_ORIGIN = 'http://localhost:3000';
 const DEFAULT_MAX_BODY_BYTES = 2_097_152;
 const DEFAULT_ATTEMPT_TIMEOUT_MS = 10_000;
 const DEFAULT_REQUEST_DEADLINE_MS = 30_000;
@@ -68,6 +70,8 @@ export function loadConfig(raw: NodeJS.ProcessEnv): Config {
       ? raw.SSE_HEADERS_ENABLED.trim().toLowerCase() === 'true'
       : true;
 
+  const corsOrigin = raw.CORS_ORIGIN?.trim() || DEFAULT_CORS_ORIGIN;
+
   if (problems.length > 0) {
     throw new Error(
       `Invalid configuration:\n${problems.map((problem) => `  - ${problem}`).join('\n')}`,
@@ -84,6 +88,7 @@ export function loadConfig(raw: NodeJS.ProcessEnv): Config {
     logLevel,
     nodeEnv,
     sseHeadersEnabled,
+    corsOrigin,
   };
 }
 

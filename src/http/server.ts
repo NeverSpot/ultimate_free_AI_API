@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Config } from '../config/env';
+import { DEFAULT_CORS_ORIGIN } from '../config/env';
 import { newRequestId } from '../core/ids';
 import type { Credential, ProviderAdapter } from '../providers/types';
 import { ApiError, envelopeOf, headersForError, statusForError, toEnvelope } from './errors';
@@ -50,6 +51,27 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   });
 
   app.decorateRequest('gatewayRequestId', '');
+
+  // CORS: allow the Next.js frontend at http://localhost:3000 to call this API.
+  // OPTIONS preflight is answered here with 204, which short-circuits every
+  // later onRequest hook (including gateway-key auth) so preflight never hits auth.
+  const corsOrigin = deps.config.corsOrigin ?? DEFAULT_CORS_ORIGIN;
+  app.addHook('onRequest', (_request, reply, done) => {
+    reply.header('Access-Control-Allow-Origin', corsOrigin);
+    reply.header(
+      'Access-Control-Allow-Methods',
+      'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+    );
+    reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    reply.header('Access-Control-Allow-Credentials', 'true');
+
+    if (_request.method === 'OPTIONS') {
+      reply.status(204).send();
+      return;
+    }
+
+    done();
+  });
 
   app.addHook('onRequest', (request, reply, done) => {
     const supplied = request.headers['x-request-id'];
