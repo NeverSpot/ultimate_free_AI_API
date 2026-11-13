@@ -17,7 +17,10 @@ export async function checkHealth(
   pgPool: Pool | null,
   redisClient: { ping: () => unknown } | null,
 ): Promise<HealthCheckResult> {
-  const checks: { postgres: string; redis: string } = { postgres: 'not-configured', redis: 'not-configured' };
+  const checks: { postgres: string; redis: string } = {
+    postgres: 'not-configured',
+    redis: 'not-configured',
+  };
   let ok = true;
 
   try {

@@ -24,7 +24,10 @@ export function getMetrics(): string {
   for (const [k, v] of Object.entries(counters)) {
     out += `gateway_requests_total{${k}} ${v}\n`;
   }
-  out += '# HELP gateway_latency_p95_ms P95 latency in ms\n# TYPE gateway_latency_p95_ms gauge\ngateway_latency_p95_ms ' + p95 + '\n';
+  out +=
+    '# HELP gateway_latency_p95_ms P95 latency in ms\n# TYPE gateway_latency_p95_ms gauge\ngateway_latency_p95_ms ' +
+    p95 +
+    '\n';
   return out;
 }
 

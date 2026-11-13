@@ -51,8 +51,8 @@ export function registerHealthz(
     '/healthz',
     { schema: { response: { 200: HealthResponse, 503: HealthResponse } } },
     async (_req, reply) => {
-      let redis: CheckStatus = 'unknown';
-      let postgres: CheckStatus = 'unknown';
+      let redis: CheckStatus;
+      let postgres: CheckStatus;
 
       if (pgPool || redisClient) {
         // Block 27: real dependency probes when pools are wired into the server.

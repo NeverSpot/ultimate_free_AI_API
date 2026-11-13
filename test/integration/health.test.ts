@@ -1,6 +1,5 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { FastifyInstance } from 'fastify';
 import type { Config } from '../../src/config/env';
 import { buildServer } from '../../src/http/server';
 import { MockProviderAdapter } from '../../src/providers/mock';
@@ -20,7 +19,7 @@ const config: Config = {
 const provider = new MockProviderAdapter({ id: 'mock', model: 'mock-model' });
 const credential: Credential = { id: 'credential-1', provider: 'mock', secret: 'not-a-real-key' };
 
-test('healthz: returns 200 when healthy', async (t) => {
+test('healthz: returns 200 when healthy', async () => {
   const app = buildServer({ config, provider, credential, logger: false });
   const res = await app.inject({ method: 'GET', url: '/healthz' });
   assert.equal(res.statusCode, 200);

@@ -14,14 +14,19 @@ export function traceIdPlugin(
   _opts: unknown,
   done: (err?: Error | undefined) => void,
 ): void {
-  app.addHook('onRequest', (req: FastifyRequest, reply: FastifyReply, done: (err?: Error | undefined) => void) => {
-    const supplied = req.headers['x-request-id'];
-    const id =
-      typeof supplied === 'string' && supplied.trim().length > 0 ? supplied.trim() : crypto.randomBytes(16).toString('hex');
-    req.headers['x-request-id'] = id;
-    reply.header('x-request-id', id);
-    done();
-  });
+  app.addHook(
+    'onRequest',
+    (req: FastifyRequest, reply: FastifyReply, done: (err?: Error | undefined) => void) => {
+      const supplied = req.headers['x-request-id'];
+      const id =
+        typeof supplied === 'string' && supplied.trim().length > 0
+          ? supplied.trim()
+          : crypto.randomBytes(16).toString('hex');
+      req.headers['x-request-id'] = id;
+      reply.header('x-request-id', id);
+      done();
+    },
+  );
   done();
 }
 

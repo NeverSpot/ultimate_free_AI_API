@@ -24,7 +24,7 @@ function makeApp(): FastifyInstance {
   return buildServer({ config, provider, credential, logger: false });
 }
 
-test('metrics: returns text/plain with p95', async (t) => {
+test('metrics: returns text/plain with p95', async () => {
   const app = makeApp();
   const res = await app.inject({ method: 'GET', url: '/metrics' });
   assert.equal(res.statusCode, 200);

@@ -24,7 +24,7 @@ function makeApp(): FastifyInstance {
   return buildServer({ config, provider, credential, logger: false });
 }
 
-test('trace-id: returns x-request-id header', async (t) => {
+test('trace-id: returns x-request-id header', async () => {
   const app = makeApp();
   const res = await app.inject({ method: 'GET', url: '/healthz' });
   assert.equal(res.statusCode, 200);
