@@ -10,7 +10,7 @@ import { registerHealthz, type HealthProbes } from './routes/healthz';
 import { registerAuthRoutes } from './routes/auth';
 import { registerUserKeyRoutes } from './routes/user-keys';
 import cacheMiddleware from './middleware/cache-middleware';
-import providersRoutes from './routes/providers';
+import { registerProvidersRoute } from './routes/providers';
 import type { createGatewayKeyAuth } from './middleware/gateway-key-auth';
 import type { UserModel } from '../models/user';
 import type { UserProviderKeyModel } from '../models/user-provider-key';
@@ -135,7 +135,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   });
 
   // Block 30: provider health endpoint at GET /v1/providers/health.
-  providersRoutes(app);
+  registerProvidersRoute(app);
 
 
   return app;
