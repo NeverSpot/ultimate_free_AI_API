@@ -139,6 +139,14 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     encryptionKey: deps.config.encryptionKey,
   });
 
+  // Block 28: graceful shutdown — stop accepting requests and close the server
+  // on SIGTERM, then exit. `index.ts` installs its own handler for production;
+  // this keeps `buildServer` hermetic and testable.
+  process.on('SIGTERM', async () => {
+    await app.close();
+    process.exit(0);
+  });
+
   return app;
 }
 
