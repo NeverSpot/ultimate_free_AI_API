@@ -100,3 +100,9 @@ export type ChatRequestType = Static<typeof ChatRequest>;
 export type ChatResponseType = Static<typeof ChatResponse>;
 export type HealthResponseType = Static<typeof HealthResponse>;
 export type ErrorEnvelopeType = Static<typeof ErrorEnvelope>;
+
+export type RegisterRequestType = { username: string; email: string; password: string };
+
+export type LoginRequestType = { username: string; password: string };
+
+export type RegenerateKeyRequestType = { username: string; password: string };
