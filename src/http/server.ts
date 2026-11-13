@@ -123,7 +123,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     });
   }
 
-
   registerHealthz(app, deps.probes);
   registerChatCompletions(app, deps);
 
@@ -136,7 +135,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   // Block 30: provider health endpoint at GET /v1/providers/health.
   registerProvidersRoute(app);
-
 
   return app;
 }
