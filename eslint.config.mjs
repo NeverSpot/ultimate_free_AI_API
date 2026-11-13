@@ -5,7 +5,16 @@ import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier';
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'artifacts/**', 'load/**'] },
+  {
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'coverage/**',
+      'artifacts/**',
+      'load/**',
+      'frontend/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   prettier,
