@@ -103,11 +103,33 @@ export function createUserProviderKeyModel(db: DbExecutor) {
     return (result.rowCount ?? 0) > 0;
   }
 
+  async function listKeys(userId: string): Promise<UserProviderKey[]> {
+    const result = await db.query<UserProviderKey>(
+      `select id, user_id, provider, ciphertext, iv, auth_tag, fingerprint, created_at, updated_at
+       from user_provider_keys
+       where user_id = $1
+       order by created_at`,
+      [userId],
+    );
+    return result.rows;
+  }
+
+  async function removeKey(userId: string, provider: string): Promise<boolean> {
+    const result = await db.query(
+      `delete from user_provider_keys
+       where user_id = $1 and provider = $2`,
+      [userId, provider],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
   return {
     createUserProviderKey,
     findByUserIdAndProvider,
     findByFingerprint,
     updateKey,
+    listKeys,
+    removeKey,
   };
 }
 
