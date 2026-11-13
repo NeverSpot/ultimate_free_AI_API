@@ -87,6 +87,59 @@ export const HealthResponse = Type.Object({
   uptime_s: Type.Number(),
 });
 
+export const RegisterRequest = Type.Object({
+  username: Type.String(),
+  email: Type.String({ format: 'email' }),
+  password: Type.String({ minLength: 8 }),
+});
+
+export const RegisterResponse = Type.Object({
+  user: Type.Object({
+    id: Type.String(),
+    username: Type.String(),
+    email: Type.String(),
+  }),
+  gateway_api_key: Type.String(),
+});
+
+export const LoginRequest = Type.Object({
+  username: Type.String(),
+  password: Type.String(),
+});
+
+export const LoginResponse = Type.Object({
+  userId: Type.String(),
+  username: Type.String(),
+});
+
+export const RegenerateKeyRequest = Type.Object({
+  username: Type.String(),
+  password: Type.String(),
+});
+
+export const RegenerateKeyResponse = Type.Object({
+  gateway_api_key: Type.String(),
+});
+
+export const ProviderKeyRequest = Type.Object({
+  provider: Type.String(),
+  label: Type.String(),
+  provider_key: Type.String(),
+});
+
+export const ProviderKeyResponse = Type.Object({
+  id: Type.String(),
+  user_id: Type.String(),
+  provider: Type.String(),
+  label: Type.String(),
+  fingerprint: Type.String(),
+  created_at: Type.String(),
+  updated_at: Type.String(),
+});
+
+export const ProviderKeyListItem = Type.Omit(ProviderKeyResponse, ['fingerprint']);
+export const ProviderKeyList = Type.Array(ProviderKeyListItem);
+
 export const ErrorEnvelope = Type.Object({
   error: Type.Object({
     message: Type.String(),
@@ -101,8 +154,13 @@ export type ChatResponseType = Static<typeof ChatResponse>;
 export type HealthResponseType = Static<typeof HealthResponse>;
 export type ErrorEnvelopeType = Static<typeof ErrorEnvelope>;
 
-export type RegisterRequestType = { username: string; email: string; password: string };
-
-export type LoginRequestType = { username: string; password: string };
-
-export type RegenerateKeyRequestType = { username: string; password: string };
+export type RegisterRequestType = Static<typeof RegisterRequest>;
+export type RegisterResponseType = Static<typeof RegisterResponse>;
+export type LoginRequestType = Static<typeof LoginRequest>;
+export type LoginResponseType = Static<typeof LoginResponse>;
+export type RegenerateKeyRequestType = Static<typeof RegenerateKeyRequest>;
+export type RegenerateKeyResponseType = Static<typeof RegenerateKeyResponse>;
+export type ProviderKeyRequestType = Static<typeof ProviderKeyRequest>;
+export type ProviderKeyResponseType = Static<typeof ProviderKeyResponse>;
+export type ProviderKeyListItemType = Static<typeof ProviderKeyListItem>;
+export type ProviderKeyListType = Static<typeof ProviderKeyList>;

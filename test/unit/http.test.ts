@@ -5,6 +5,7 @@ import type { Config } from '../../src/config/env';
 import { buildServer } from '../../src/http/server';
 import { MockProviderAdapter } from '../../src/providers/mock';
 import type { Credential } from '../../src/providers/types';
+import { createGatewayKeyAuth } from '../../src/http/middleware/gateway-key-auth';
 
 const NOW = 1_731_250_000_000;
 
@@ -39,8 +40,15 @@ const validBody = {
 
 const authorized = { authorization: `Bearer ${config.adminToken}` };
 
-function makeApp(): FastifyInstance {
-  return buildServer({ config, provider, credential, now: () => NOW, logger: false });
+function makeApp(gatewayKeyAuth?: ReturnType<typeof createGatewayKeyAuth>): FastifyInstance {
+  return buildServer({
+    config,
+    provider,
+    credential,
+    now: () => NOW,
+    logger: false,
+    gatewayKeyAuth,
+  });
 }
 
 async function post(
@@ -128,7 +136,11 @@ test('http: 200 returns an OpenAI-shaped body and exact keys', async (t) => {
 });
 
 test('http: 401 when the bearer token is missing', async (t) => {
-  const app = makeApp();
+  const gatewayKeyAuth = createGatewayKeyAuth({
+    adminToken: config.adminToken,
+    findUserByGatewayKey: async () => null,
+  });
+  const app = makeApp(gatewayKeyAuth);
   t.after(async () => {
     await app.close();
   });
@@ -143,7 +155,11 @@ test('http: 401 when the bearer token is missing', async (t) => {
 });
 
 test('http: 401 when the bearer token is wrong', async (t) => {
-  const app = makeApp();
+  const gatewayKeyAuth = createGatewayKeyAuth({
+    adminToken: config.adminToken,
+    findUserByGatewayKey: async () => null,
+  });
+  const app = makeApp(gatewayKeyAuth);
   t.after(async () => {
     await app.close();
   });
@@ -246,7 +262,11 @@ test('http: response carries the full x-gateway-* header set', async (t) => {
 });
 
 test('http: every non-2xx returns the OpenAI error envelope', async (t) => {
-  const app = makeApp();
+  const gatewayKeyAuth = createGatewayKeyAuth({
+    adminToken: config.adminToken,
+    findUserByGatewayKey: async () => null,
+  });
+  const app = makeApp(gatewayKeyAuth);
   t.after(async () => {
     await app.close();
   });
@@ -264,7 +284,7 @@ test('http: every non-2xx returns the OpenAI error envelope', async (t) => {
     assertErrorEnvelope(res.json());
   }
 
-  const notFound = await app.inject({ method: 'GET', url: '/v1/does-not-exist' });
+  const notFound = await app.inject({ method: 'GET', url: '/v1/does-not-exist', headers: { authorization: `Bearer ${config.adminToken}` } });
   assert.equal(notFound.statusCode, 404);
   assertErrorEnvelope(notFound.json());
 });

@@ -36,10 +36,9 @@ export function registerAuthRoutes(app: FastifyInstance, deps: { userStore: User
     }
 
     const result = await deps.userStore.createUser({ username, email, password });
-    return reply.status(200).send({
-      userId: result.user.id,
-      username: result.user.username,
-      gatewayApiKey: result.gatewayApiKeyPlaintext,
+    return reply.status(201).send({
+      user: { id: result.user.id, username: result.user.username, email: result.user.email },
+      gateway_api_key: result.gatewayApiKeyPlaintext,
     });
   });
 
@@ -61,6 +60,6 @@ export function registerAuthRoutes(app: FastifyInstance, deps: { userStore: User
       throw new ApiError('auth', 'invalid username or password');
     }
     const gatewayApiKey = await deps.userStore.setGatewayApiKeyHash(user.id);
-    return reply.send({ gatewayApiKey });
+    return reply.send({ gateway_api_key: gatewayApiKey });
   });
 }

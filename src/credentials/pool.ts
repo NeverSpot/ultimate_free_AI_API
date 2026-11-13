@@ -156,7 +156,7 @@ function hashSecret(provider: ProviderId, secret: string): string {
  * `JSON.stringify`, `String` and `console.log` therefore never print the key, while
  * adapters can still read `cred.secret`.
  */
-function makeCredential(
+export function makeCredential(
   provider: ProviderId,
   id: string,
   label: string,

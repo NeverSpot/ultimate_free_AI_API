@@ -1,4 +1,3 @@
-import { timingSafeEqual } from 'node:crypto';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ProviderError } from '../../core/errors';
@@ -19,38 +18,14 @@ import { ApiError, headersForError, statusForError, toEnvelope } from '../errors
 import { extractIdempotencyKey, replayResponse } from '../middleware/idempotency';
 import { ChatRequest, ChatResponse } from '../schemas';
 import type { ServerDeps } from '../server';
+import { makeCredential } from '../../credentials/pool';
+import type { Credential } from '../../providers/types';
+import type { UserProviderKey } from '../../models/user-provider-key';
 import { formatSseChunk, SSE_DONE, writeWithBackpressure } from '../sse';
 import { buildRouterRuntime, type ChatRouterDeps, type RouterRuntime } from './router-runtime';
 
 export type { ChatRouterDeps, RouterRuntime };
 
-/** Verify the admin token on protected endpoints. */
-function assertAuthorized(req: FastifyRequest, expected: string): void {
-  const header = req.headers.authorization;
-  const match = header === undefined ? null : /^Bearer\s+(.+)$/i.exec(header);
-  const token = match?.[1]?.trim();
-
-  if (token === undefined || token.length === 0) {
-    throw new ApiError('auth', 'missing bearer token');
-  }
-
-  if (!constantTimeEqual(token, expected)) {
-    throw new ApiError('auth', 'invalid gateway key');
-  }
-}
-
-function constantTimeEqual(left: string, right: string): boolean {
-  const a = Buffer.from(left, 'utf8');
-  const b = Buffer.from(right, 'utf8');
-
-  if (a.length !== b.length) {
-    // Keep the comparison cost independent of where the lengths differ.
-    timingSafeEqual(a, a);
-    return false;
-  }
-
-  return timingSafeEqual(a, b);
-}
 
 const UNSUPPORTED_FIELDS = [
   'logprobs',
@@ -131,7 +106,6 @@ export function registerChatCompletions(
     {
       schema: { body: ChatRequest, response: { 200: ChatResponse } },
       preHandler: async (req) => {
-        assertAuthorized(req, deps.config.adminToken);
         assertSupported(req.body, (message) => req.log.debug(message));
       },
     },
@@ -165,7 +139,8 @@ export function registerChatCompletions(
         user: req.body.user,
       };
 
-      const candidates = buildCandidates(deps, registry, canonical);
+      const userCredentials = await buildUserCredentials(req, deps);
+      const candidates = buildCandidates(deps, registry, canonical, userCredentials);
       const policies = deps.policies ?? buildPolicies(candidates);
 
       if (isStream) {
@@ -493,9 +468,24 @@ function buildCandidates(
   deps: ServerDeps & ChatRouterDeps,
   registry: ProviderRegistry,
   canonical: CanonicalRequest,
+  userCredentials?: Credential[],
 ): Candidate[] {
   if (deps.candidates !== undefined) {
     return [...deps.candidates];
+  }
+
+  if (userCredentials !== undefined) {
+    const candidates: Candidate[] = [];
+    for (const credential of userCredentials) {
+      const providerId = credential.provider;
+      candidates.push({
+        modelId: canonical.model ?? providerId,
+        credential,
+        providerId,
+        adapterId: providerId,
+      });
+    }
+    return candidates;
   }
 
   if (deps.pool !== undefined) {
@@ -531,4 +521,28 @@ function buildPolicies(candidates: ReadonlyArray<Candidate>): Map<string, LimitP
     }
   }
   return policies;
+}
+
+async function buildUserCredentials(
+  req: FastifyRequest,
+  deps: ServerDeps & ChatRouterDeps,
+): Promise<Credential[] | undefined> {
+  if (req.user === undefined) {
+    return undefined;
+  }
+
+  const providerKeyStore = deps.providerKeyStore;
+  if (providerKeyStore === undefined) {
+    return undefined;
+  }
+
+  const keys: UserProviderKey[] = await providerKeyStore.listKeys(req.user.id);
+  const credentials: Credential[] = [];
+  for (const key of keys) {
+    const secret = await providerKeyStore.getDecryptedKey(req.user.id, key.id);
+    if (secret !== null) {
+      credentials.push(makeCredential(key.provider, key.id, key.id, secret));
+    }
+  }
+  return credentials;
 }

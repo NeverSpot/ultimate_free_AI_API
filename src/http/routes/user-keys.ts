@@ -4,15 +4,7 @@ import type { Static } from '@sinclair/typebox';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { encryptAes256Gcm, sha256Hex } from '../../lib/crypto';
 import { ApiError } from '../errors';
-import type { Config } from '../../config/env';
-import type { DbExecutor } from '../../db/client';
-import { createUserProviderKeyModel, type UserProviderKey } from '../../models/user-provider-key';
-
-declare module 'fastify' {
-  interface FastifyRequest {
-    user?: { id: string };
-  }
-}
+import type { UserProviderKey, UserProviderKeyModel } from '../../models/user-provider-key';
 
 const KeySummary = Type.Object({
   provider: Type.String(),
@@ -57,8 +49,11 @@ function toKeySummary(key: UserProviderKey): KeySummaryType {
   };
 }
 
-function requireUserId(request: FastifyRequest): string {
-  const userId = request.user?.id;
+function requireUserId(
+  request: FastifyRequest,
+  getUserId: (req: FastifyRequest) => string | null,
+): string {
+  const userId = getUserId(request);
   if (!userId) {
     throw new ApiError('auth', 'authentication required');
   }
@@ -67,17 +62,21 @@ function requireUserId(request: FastifyRequest): string {
 
 export function registerUserKeyRoutes(
   app: FastifyInstance,
-  deps: { db: DbExecutor; config: Config },
+  deps: {
+    providerKeyStore: UserProviderKeyModel;
+    getUserId: (req: FastifyRequest) => string | null;
+    encryptionKey: string;
+  },
 ): void {
   const server = app.withTypeProvider<TypeBoxTypeProvider>();
-  const store = createUserProviderKeyModel(deps.db);
-  const encryptionKey = deps.config.encryptionKey;
+  const store = deps.providerKeyStore;
+  const encryptionKey = deps.encryptionKey;
 
   server.get(
     '/v1/user/keys',
     { schema: { response: { 200: ListResponse } } },
     async (request, reply) => {
-      const userId = requireUserId(request);
+      const userId = requireUserId(request, deps.getUserId);
       const keys = await store.listKeys(userId);
       return reply.status(200).send({ keys: keys.map(toKeySummary) });
     },
@@ -87,7 +86,7 @@ export function registerUserKeyRoutes(
     '/v1/user/keys',
     { schema: { body: SubmitBody, response: { 200: KeySummary } } },
     async (request, reply) => {
-      const userId = requireUserId(request);
+      const userId = requireUserId(request, deps.getUserId);
       requireNonEmpty({ provider: request.body.provider, providerKey: request.body.providerKey });
       const { provider, providerKey } = request.body;
       const { ciphertext, iv, authTag } = encryptAes256Gcm(providerKey, encryptionKey);
@@ -121,7 +120,7 @@ export function registerUserKeyRoutes(
     '/v1/user/keys/:provider',
     { schema: { params: Params, response: { 200: DeleteResponse } } },
     async (request, reply) => {
-      const userId = requireUserId(request);
+      const userId = requireUserId(request, deps.getUserId);
       await store.removeKey(userId, request.params.provider);
       return reply.status(200).send({ ok: true });
     },

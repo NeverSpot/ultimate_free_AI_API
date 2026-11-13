@@ -1,4 +1,5 @@
 import type { DbExecutor } from '../db/client';
+import { decryptAes256Gcm } from '../lib/crypto';
 
 export interface UserProviderKey {
   id: string;
@@ -21,7 +22,7 @@ export interface NewUserProviderKey {
   fingerprint: string;
 }
 
-export function createUserProviderKeyModel(db: DbExecutor) {
+export function createUserProviderKeyModel(db: DbExecutor, masterKey: string) {
   async function createUserProviderKey(key: NewUserProviderKey): Promise<UserProviderKey> {
     const result = await db.query<UserProviderKey>(
       `insert into user_provider_keys (user_id, provider, ciphertext, iv, auth_tag, fingerprint)
@@ -114,6 +115,23 @@ export function createUserProviderKeyModel(db: DbExecutor) {
     return result.rows;
   }
 
+  async function getDecryptedKey(
+    userId: string,
+    keyId: string,
+  ): Promise<string | null> {
+    const result = await db.query<Pick<UserProviderKey, 'ciphertext' | 'iv' | 'auth_tag'>>(
+      `select ciphertext, iv, auth_tag
+       from user_provider_keys
+       where id = $1 and user_id = $2`,
+      [keyId, userId],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      return null;
+    }
+    return decryptAes256Gcm(row.ciphertext, row.iv, row.auth_tag, masterKey);
+  }
+
   async function removeKey(userId: string, provider: string): Promise<boolean> {
     const result = await db.query(
       `delete from user_provider_keys
@@ -129,6 +147,7 @@ export function createUserProviderKeyModel(db: DbExecutor) {
     findByFingerprint,
     updateKey,
     listKeys,
+    getDecryptedKey,
     removeKey,
   };
 }

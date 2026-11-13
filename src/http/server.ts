@@ -6,6 +6,11 @@ import { ApiError, envelopeOf, headersForError, statusForError, toEnvelope } fro
 import type { IdempotencyService } from './middleware/idempotency';
 import { registerChatCompletions } from './routes/chat-completions';
 import { registerHealthz, type HealthProbes } from './routes/healthz';
+import { registerAuthRoutes } from './routes/auth';
+import { registerUserKeyRoutes } from './routes/user-keys';
+import type { createGatewayKeyAuth } from './middleware/gateway-key-auth';
+import type { UserModel } from '../models/user';
+import type { UserProviderKeyModel } from '../models/user-provider-key';
 
 export interface ServerDeps {
   config: Config;
@@ -18,6 +23,9 @@ export interface ServerDeps {
   /** Optional dependency probes for /healthz. Unwired probes report `unknown`. */
   probes?: HealthProbes;
   idempotencyService?: IdempotencyService;
+  userStore?: UserModel;
+  providerKeyStore?: UserProviderKeyModel;
+  gatewayKeyAuth?: ReturnType<typeof createGatewayKeyAuth>;
 }
 
 declare module 'fastify' {
@@ -81,8 +89,24 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       );
   });
 
+  const gatewayKeyAuth = deps.gatewayKeyAuth;
+  if (gatewayKeyAuth) {
+    app.addHook('onRequest', async (request, _reply) => {
+      const url = request.url;
+      if (url === '/healthz' || url.startsWith('/v1/auth/')) return;
+      await gatewayKeyAuth.authenticate(request);
+    });
+  }
+
   registerHealthz(app, deps.probes);
   registerChatCompletions(app, deps);
+
+  registerAuthRoutes(app, { userStore: deps.userStore! });
+  registerUserKeyRoutes(app, {
+    providerKeyStore: deps.providerKeyStore!,
+    getUserId: (req) => req.user?.id ?? null,
+    encryptionKey: deps.config.encryptionKey,
+  });
 
   return app;
 }
