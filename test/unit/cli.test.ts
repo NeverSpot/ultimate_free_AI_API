@@ -3,7 +3,7 @@ import { strict as assert } from 'node:assert';
 import { execFileSync } from 'node:child_process';
 
 test('cli: health command runs', () => {
-  let output = '';
+  let output: string;
   try {
     output = execFileSync('node', ['scripts/gw-cli.mjs', 'health'], { encoding: 'utf8' });
   } catch (err) {
