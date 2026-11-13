@@ -650,6 +650,7 @@ test('http route: chat-completions wires execute() and maps rate_limited to 429 
   const config: Config = {
     port: 0,
     adminToken: 'test-token',
+    encryptionKey: 'test-master-key-32-chars-minimum!',
     maxBodyBytes: 1_048_576,
     attemptTimeoutMs: 5_000,
     requestDeadlineMs: 15_000,

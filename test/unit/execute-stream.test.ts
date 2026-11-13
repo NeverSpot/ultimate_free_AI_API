@@ -297,6 +297,7 @@ test('SSE: stream: true response ends with [DONE] and uses text/event-stream', a
   const config: Config = {
     port: 0,
     adminToken: 'test-token',
+    encryptionKey: 'test-master-key-32-chars-minimum!',
     maxBodyBytes: 1_048_576,
     attemptTimeoutMs: 5_000,
     requestDeadlineMs: 15_000,
@@ -345,6 +346,7 @@ test('SSE: each data line is valid JSON with the chat.completion.chunk shape', a
   const config: Config = {
     port: 0,
     adminToken: 'test-token',
+    encryptionKey: 'test-master-key-32-chars-minimum!',
     maxBodyBytes: 1_048_576,
     attemptTimeoutMs: 5_000,
     requestDeadlineMs: 15_000,
@@ -411,6 +413,7 @@ test('SSE: mid-stream provider error emits an SSE error event', async (t) => {
   const config: Config = {
     port: 0,
     adminToken: 'test-token',
+    encryptionKey: 'test-master-key-32-chars-minimum!',
     maxBodyBytes: 1_048_576,
     attemptTimeoutMs: 5_000,
     requestDeadlineMs: 15_000,
@@ -507,6 +510,7 @@ test('SSE response headers: sets no-cache, no-transform, X-Accel-Buffering, Cont
   const config: Config = {
     port: 0,
     adminToken: 'test-token',
+    encryptionKey: 'test-master-key-32-chars-minimum!',
     maxBodyBytes: 1_048_576,
     attemptTimeoutMs: 5000,
     requestDeadlineMs: 10000,
@@ -550,6 +554,7 @@ test('SSE keepalive: emits : keepalive\\n\\n comment during stream silence', asy
   const config: Config = {
     port: 0,
     adminToken: 'test-token',
+    encryptionKey: 'test-master-key-32-chars-minimum!',
     maxBodyBytes: 1_048_576,
     attemptTimeoutMs: 5000,
     requestDeadlineMs: 10000,

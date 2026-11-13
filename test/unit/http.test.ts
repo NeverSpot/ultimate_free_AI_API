@@ -11,6 +11,7 @@ const NOW = 1_731_250_000_000;
 const config: Config = {
   port: 0,
   adminToken: 'test-admin-token',
+  encryptionKey: 'test-master-key-32-chars-minimum!',
   maxBodyBytes: 2 * 1024 * 1024,
   attemptTimeoutMs: 10_000,
   requestDeadlineMs: 30_000,

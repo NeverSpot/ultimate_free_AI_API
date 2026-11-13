@@ -1,6 +1,7 @@
 export interface Config {
   port: number;
   adminToken: string;
+  encryptionKey: string;
   maxBodyBytes: number;
   attemptTimeoutMs: number;
   requestDeadlineMs: number;
@@ -30,6 +31,11 @@ export function loadConfig(raw: NodeJS.ProcessEnv): Config {
   const adminToken = raw.ADMIN_TOKEN?.trim() ?? '';
   if (adminToken.length === 0) {
     problems.push('ADMIN_TOKEN is required');
+  }
+
+  const encryptionKey = raw.MASTER_ENCRYPTION_KEY?.trim() ?? '';
+  if (encryptionKey.length === 0) {
+    problems.push('MASTER_ENCRYPTION_KEY is required');
   }
 
   const port = readPositiveInt(raw, 'PORT', DEFAULT_PORT, problems);
@@ -71,6 +77,7 @@ export function loadConfig(raw: NodeJS.ProcessEnv): Config {
   return {
     port,
     adminToken,
+    encryptionKey,
     maxBodyBytes,
     attemptTimeoutMs,
     requestDeadlineMs,
