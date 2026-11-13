@@ -1,6 +1,8 @@
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
+import type { Pool } from 'pg';
 import { HealthResponse } from '../schemas';
+import { checkHealth } from '../../telemetry/health';
 
 const VERSION = '0.1.0';
 
@@ -37,26 +39,41 @@ async function runProbe(probe: Probe | undefined): Promise<CheckStatus> {
   }
 }
 
-export function registerHealthz(app: FastifyInstance, probes: HealthProbes = {}): void {
+export function registerHealthz(
+  app: FastifyInstance,
+  probes: HealthProbes = {},
+  pgPool: Pool | null = null,
+  redisClient: { ping: () => unknown } | null = null,
+): void {
   const server = app.withTypeProvider<TypeBoxTypeProvider>();
 
   server.get(
     '/healthz',
     { schema: { response: { 200: HealthResponse, 503: HealthResponse } } },
     async (_req, reply) => {
-      const checks = {
-        redis: await runProbe(probes.redis),
-        postgres: await runProbe(probes.postgres),
-      };
+      let redis: CheckStatus = 'unknown';
+      let postgres: CheckStatus = 'unknown';
 
-      const values = Object.values(checks);
-      const status = values.includes('down')
+      if (pgPool || redisClient) {
+        // Block 27: real dependency probes when pools are wired into the server.
+        const result = await checkHealth(pgPool, redisClient);
+        redis = toCheckStatus(result.checks.redis);
+        postgres = toCheckStatus(result.checks.postgres);
+      } else {
+        redis = await runProbe(probes.redis);
+        postgres = await runProbe(probes.postgres);
+      }
+
+      const checks = { redis, postgres };
+      const values = [redis, postgres];
+      const down = values.includes('down');
+      const status = down
         ? ('down' as const)
         : values.includes('degraded')
           ? ('degraded' as const)
           : ('ok' as const);
 
-      return reply.status(status === 'down' ? 503 : 200).send({
+      return reply.status(down ? 503 : 200).send({
         status,
         checks,
         version: VERSION,
@@ -64,4 +81,14 @@ export function registerHealthz(app: FastifyInstance, probes: HealthProbes = {})
       });
     },
   );
+}
+
+/**
+ * Map checkHealth vocabulary onto the healthz status vocabulary so the
+ * response schema stays faithful: never 'ok' for an unchecked dependency.
+ */
+function toCheckStatus(v: string): CheckStatus {
+  if (v === 'healthy') return 'ok';
+  if (v === 'unhealthy') return 'down';
+  return 'unknown';
 }
