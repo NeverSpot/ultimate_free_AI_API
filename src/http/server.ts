@@ -10,8 +10,7 @@ import { registerHealthz, type HealthProbes } from './routes/healthz';
 import { registerAuthRoutes } from './routes/auth';
 import { registerUserKeyRoutes } from './routes/user-keys';
 import cacheMiddleware from './middleware/cache-middleware';
-import traceIdPlugin from './middleware/trace-id';
-import metricsRoute from './routes/metrics';
+import providersRoutes from './routes/providers';
 import type { createGatewayKeyAuth } from './middleware/gateway-key-auth';
 import type { UserModel } from '../models/user';
 import type { UserProviderKeyModel } from '../models/user-provider-key';
@@ -124,10 +123,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     });
   }
 
-  // Block 25: request tracing — every response carries x-request-id.
-  app.register(traceIdPlugin);
-  // Block 26: Prometheus metrics endpoint at GET /metrics.
-  app.register(metricsRoute);
 
   registerHealthz(app, deps.probes);
   registerChatCompletions(app, deps);
@@ -139,13 +134,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     encryptionKey: deps.config.encryptionKey,
   });
 
-  // Block 28: graceful shutdown — stop accepting requests and close the server
-  // on SIGTERM, then exit. `index.ts` installs its own handler for production;
-  // this keeps `buildServer` hermetic and testable.
-  process.on('SIGTERM', async () => {
-    await app.close();
-    process.exit(0);
-  });
+  // Block 30: provider health endpoint at GET /v1/providers/health.
+  providersRoutes(app);
+
 
   return app;
 }
