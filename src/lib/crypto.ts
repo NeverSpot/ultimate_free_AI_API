@@ -1,4 +1,11 @@
-import { createCipheriv, createDecipheriv, randomBytes, createHash, scrypt, timingSafeEqual } from 'node:crypto';
+import {
+  createCipheriv,
+  createDecipheriv,
+  randomBytes,
+  createHash,
+  scrypt,
+  timingSafeEqual,
+} from 'node:crypto';
 import { promisify } from 'node:util';
 
 const scryptAsync = promisify(scrypt);
@@ -7,7 +14,10 @@ export function deriveKey(masterKey: string): Buffer {
   return createHash('sha256').update(masterKey).digest();
 }
 
-export function encryptAes256Gcm(plaintext: string, masterKey: string): {
+export function encryptAes256Gcm(
+  plaintext: string,
+  masterKey: string,
+): {
   ciphertext: Buffer;
   iv: Buffer;
   authTag: Buffer;
@@ -16,7 +26,7 @@ export function encryptAes256Gcm(plaintext: string, masterKey: string): {
   const iv = randomBytes(16);
   const cipher = createCipheriv('aes-256-gcm', key, iv);
   const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
-  return {ciphertext: encrypted, iv, authTag: cipher.getAuthTag()};
+  return { ciphertext: encrypted, iv, authTag: cipher.getAuthTag() };
 }
 
 export function decryptAes256Gcm(
