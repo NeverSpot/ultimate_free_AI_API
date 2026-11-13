@@ -2,12 +2,16 @@
 
 > Handoff file. Read first, rewrite last. Keep under 25 lines.
 
-- **Current block:** Block 18 complete (Docs, diagram, demo — stranger clone <5 min)
+- **Current block:** Block 19 — User registration & gateway API key (Phase E — User Identity)
 - **Last green verify:** `npm run verify` -> exit 0, **344 hermetic tests** (2.06s)
 - **Phase A (Aggregate): COMPLETE.** Blocks 1–10 merged to master at `7bdb247`.
 - **Phase B (Survive 429): 100% COMPLETE.** Capacity gate passed + Docker Compose deploy (`d39e7f4`).
 - **Phase C (Be good, not just available): COMPLETE.** Blocks 11–15 merged to master.
-- **Phase D (Prove it): COMPLETE.** Block 16 (load test), Block 17 (Docker + Nginx), Block 18 (docs + demo).
+- **Phase D (Prove it): COMPLETE.** Block 16 (load test), Block 17 (Docker + Nginx), Block 18 (docs + demo). Merged to master.
+- **Phase E (User Identity): PENDING.** Block 19 next.
+- **Phase F (Provider Key Vault): PENDING.** Blocks 21–22.
+- **Phase G (User-Aware Routing): PENDING.** Block 23.
+- **Phase H (Frontend Dashboard): PENDING.** Block 24.
 
 ## Done
 
@@ -18,7 +22,8 @@
 
 ## Next
 
-- All 18 blocks complete. Merge `opencode/block-18-docs-demo` to master.
+- Block 19: User registration & gateway API key (Phase E — User Identity)
+- Then Blocks 20–24 through Phase H
 
 ## Do not touch without a human
 

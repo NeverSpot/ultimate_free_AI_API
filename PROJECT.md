@@ -129,9 +129,19 @@ that exist today, so a command below becomes real when its block lands.
 | 13 | `route()` + table store | `npm run test -- --test-name-pattern "policy"` |
 | 14 | User spend budget | `npm run test:int -- --test-name-pattern "budget"` (429 before dispatch) |
 | 15 | Idempotency keys | `npm run test:int -- --test-name-pattern "idempotency"` (1 upstream call) |
-| 16 | Load test + metrics | `npm run load` (4 numbers printed) |
-| 17 | Docker + Nginx deploy | `docker compose up -d --wait && npm run smoke -- --stream` |
-| 18 | Docs + demo | `npm run verify` + a manual five-minute clone test |
+|| 16 | Load test + metrics | `npm run load` (4 numbers printed) |
+|| 17 | Docker + Nginx deploy | `docker compose up -d --wait && npm run smoke -- --stream` |
+|| 18 | Docs + demo | `npm run verify` + a manual five-minute clone test |
+|**Phase E — User Identity**|  |  |
+|| 19 | User registration & gateway API key | `npm run verify` + `POST /v1/auth/register` returns `gateway_api_key` |
+|| 20 | Gateway API key lifecycle | `POST /v1/auth/regenerate-key` invalidates old key, issues new one |
+|**Phase F — Provider Key Vault**|  |  |
+|| 21 | Provider key storage backend | `test/unit/provider-key-store.test.ts` passes |
+|| 22 | Provider key management routes | `GET/POST/PATCH/DELETE /v1/user/provider-keys` verified |
+|**Phase G — User-Aware Routing**|  |  |
+|| 23 | Chat-completions routing via user keys | `POST /v1/chat/completions` with `gk_` key routes through user's keys |
+|**Phase H — Frontend Dashboard**|  |  |
+|| 24 | Next.js dashboard | `cd frontend && npm run build` + `npm run verify` |
 
 ---
 
@@ -345,12 +355,49 @@ decision is what makes pooling possible later.
 - **Pitfall:** default Nginx buffers responses and makes streaming look broken while the app is fine.
 
 #### Block 18 — Docs, diagram, demo
-
 - **Build:** README with architecture diagram, eval table, load-test numbers; 2-minute demo video; résumé bullets.
 - **Done when:** a stranger can clone, `docker compose up`, and get a streamed completion in under 5 minutes.
 
----
+### Phase E — User Identity
 
+#### Block 19 — User registration & gateway API key
+- **Learn (2h):** password hashing with `crypto.scrypt`, JWT-less bearer token design, `gk_`-prefixed key format, SHA-256 key hashing for storage, AES-256-GCM encryption with `MASTER_ENCRYPTION_KEY`.
+- **Build:** `migrations/017_users.sql` (`users` + `user_provider_keys` tables), `src/lib/crypto.ts`, `src/models/user.ts`.
+- **Done when:** `POST /v1/auth/register` returns `gateway_api_key` starting with `gk_`; duplicate username/email returns 400.
+- **Pitfall:** plaintext key shown only once at registration — lost keys require regeneration (invalidation).
+
+#### Block 20 — Gateway API key lifecycle
+- **Build:** `POST /v1/auth/regenerate-key` (username+password verify → invalidate old key → issue new one → return plaintext once).
+- **Done when:** regenerated key works; old key returns 401 immediately after rotation.
+- **Pitfall:** auth hook skips `/v1/auth/*` — regenerate-key must verify password directly, not rely on `req.user`.
+
+### Phase F — Provider Key Vault
+
+#### Block 21 — Provider key storage backend
+- **Build:** `src/models/provider-key.ts` — encrypt/decrypt provider keys with AES-256-GCM, `sha256Hex` fingerprint for dedup.
+- **Done when:** `test/unit/provider-key-store.test.ts` passes (encrypt, list, decrypt, update, remove).
+- **Pitfall:** `secret` is a non-enumerable own property — use `makeCredential()` from `pool.ts`, never raw `{ secret }` objects.
+
+#### Block 22 — Provider key management routes
+- **Build:** `src/http/routes/user-keys.ts` — `GET/POST/PATCH/DELETE /v1/user/provider-keys`.
+- **Done when:** all four verbs verified via `app.inject()` with correct 201/200/204/400/401 responses.
+- **Pitfall:** PATCH must return actual row data from DB, not hardcoded placeholders.
+
+### Phase G — User-Aware Routing
+
+#### Block 23 — Chat-completions routing via user keys
+- **Build:** modify `src/http/routes/chat-completions.ts` — auth via `gk_` key, look up user's provider keys, decrypt, build candidates via `buildCandidates()` with user credentials, route through `RouterRuntime` (no rebuild).
+- **Done when:** `POST /v1/chat/completions` with valid `gk_` key → 200; invalid key → 401; admin token → 200.
+- **Pitfall:** do not recreate `RouterRuntime` per request — it holds long-lived state (ledger, breaker, parking).
+
+### Phase H — Frontend Dashboard
+
+#### Block 24 — Next.js dashboard
+- **Build:** `frontend/` — Next.js App Router (landing, login, keys pages), CORS on Fastify backend, API client wrapper.
+- **Done when:** `cd frontend && npm run build` exits 0; `npm run verify` exits 0; keys page loads provider keys from backend.
+- **Pitfall:** `frontend/` is an isolated workspace — do not add it to root `npm run verify` (keeps gate under 10s).
+
+---
 ## 7. Progress
 
 > Block 1 was pulled forward into Block 2: the canonical types, `ProviderAdapter` contract
