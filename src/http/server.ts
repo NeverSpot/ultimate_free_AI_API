@@ -9,6 +9,9 @@ import { registerChatCompletions } from './routes/chat-completions';
 import { registerHealthz, type HealthProbes } from './routes/healthz';
 import { registerAuthRoutes } from './routes/auth';
 import { registerUserKeyRoutes } from './routes/user-keys';
+import cacheMiddleware from './middleware/cache-middleware';
+import traceIdPlugin from './middleware/trace-id';
+import metricsRoute from './routes/metrics';
 import type { createGatewayKeyAuth } from './middleware/gateway-key-auth';
 import type { UserModel } from '../models/user';
 import type { UserProviderKeyModel } from '../models/user-provider-key';
@@ -108,6 +111,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       );
   });
 
+  // Block 29: cache middleware wraps POST /v1/chat/completions as a preHandler
+  // hook, so it is wired before the routes it intercepts.
+  cacheMiddleware(app);
+
   const gatewayKeyAuth = deps.gatewayKeyAuth;
   if (gatewayKeyAuth) {
     app.addHook('onRequest', async (request, _reply) => {
@@ -116,6 +123,11 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       await gatewayKeyAuth.authenticate(request);
     });
   }
+
+  // Block 25: request tracing — every response carries x-request-id.
+  app.register(traceIdPlugin);
+  // Block 26: Prometheus metrics endpoint at GET /metrics.
+  app.register(metricsRoute);
 
   registerHealthz(app, deps.probes);
   registerChatCompletions(app, deps);
