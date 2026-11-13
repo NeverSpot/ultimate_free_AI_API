@@ -8,10 +8,7 @@ export interface AuthenticatedUser {
   username: string;
 }
 
-export type AuthResult =
-  | { kind: 'user'; user: AuthenticatedUser }
-  | { kind: 'admin' }
-  | null;
+export type AuthResult = { kind: 'user'; user: AuthenticatedUser } | { kind: 'admin' } | null;
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -24,9 +21,7 @@ export function createGatewayKeyAuth({
   findUserByGatewayKey,
 }: {
   adminToken: string;
-  findUserByGatewayKey: (
-    keyHash: string,
-  ) => Promise<{ id: string; username: string } | null>;
+  findUserByGatewayKey: (keyHash: string) => Promise<{ id: string; username: string } | null>;
 }) {
   async function authenticate(req: FastifyRequest): Promise<AuthResult> {
     const header = req.headers.authorization;
@@ -49,10 +44,7 @@ export function createGatewayKeyAuth({
 
     const tokenBuf = Buffer.from(token, 'utf8');
     const adminBuf = Buffer.from(adminToken, 'utf8');
-    if (
-      tokenBuf.length !== adminBuf.length ||
-      !timingSafeEqual(tokenBuf, adminBuf)
-    ) {
+    if (tokenBuf.length !== adminBuf.length || !timingSafeEqual(tokenBuf, adminBuf)) {
       throw new ApiError('auth', 'invalid gateway key');
     }
     return { kind: 'admin' };

@@ -115,10 +115,7 @@ export function createUserProviderKeyModel(db: DbExecutor, masterKey: string) {
     return result.rows;
   }
 
-  async function getDecryptedKey(
-    userId: string,
-    keyId: string,
-  ): Promise<string | null> {
+  async function getDecryptedKey(userId: string, keyId: string): Promise<string | null> {
     const result = await db.query<Pick<UserProviderKey, 'ciphertext' | 'iv' | 'auth_tag'>>(
       `select ciphertext, iv, auth_tag
        from user_provider_keys

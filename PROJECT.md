@@ -74,7 +74,7 @@ This order is the whole design. It differs from a normal LLM gateway:
 | User spend budget | Layer | only matters for paid keys |
 | Idempotency keys | Layer | after accounting |
 | Semantic cache | **Dropped** | silent wrong answers |
-| Dashboard / UI | **Dropped** | curl + README tables |
+| Dashboard / UI | **Layer** | Phase H / Block 24 — Next.js dashboard (was "Dropped"; revived with user identity in Blocks 19–24) |
 
 ## 5. Foundation tests — the gate
 
@@ -106,7 +106,7 @@ Test 4 is the one that proves the product exists.
 - **Learn comes first.** 20 min reading, 40 min spike, then build.
 - If a block overruns 2x, cut scope — do not extend the block.
 
-**Phases:** A = aggregate keys · B = survive 429 · C = be good, not just available · D = prove it.
+**Phases:** A = aggregate keys · B = survive 429 · C = be good, not just available · D = prove it · E = user identity · F = provider key vault · G = user-aware routing · H = frontend dashboard.
 
 **Verification contract.** Every block closes on a runnable command, never on prose.
 Each command is created by the block that needs it — `AGENTS.md` lists only the ones
@@ -129,19 +129,19 @@ that exist today, so a command below becomes real when its block lands.
 | 13 | `route()` + table store | `npm run test -- --test-name-pattern "policy"` |
 | 14 | User spend budget | `npm run test:int -- --test-name-pattern "budget"` (429 before dispatch) |
 | 15 | Idempotency keys | `npm run test:int -- --test-name-pattern "idempotency"` (1 upstream call) |
-|| 16 | Load test + metrics | `npm run load` (4 numbers printed) |
-|| 17 | Docker + Nginx deploy | `docker compose up -d --wait && npm run smoke -- --stream` |
-|| 18 | Docs + demo | `npm run verify` + a manual five-minute clone test |
-|**Phase E — User Identity**|  |  |
-|| 19 | User registration & gateway API key | `npm run verify` + `POST /v1/auth/register` returns `gateway_api_key` |
-|| 20 | Gateway API key lifecycle | `POST /v1/auth/regenerate-key` invalidates old key, issues new one |
-|**Phase F — Provider Key Vault**|  |  |
-|| 21 | Provider key storage backend | `test/unit/provider-key-store.test.ts` passes |
-|| 22 | Provider key management routes | `GET/POST/PATCH/DELETE /v1/user/provider-keys` verified |
-|**Phase G — User-Aware Routing**|  |  |
-|| 23 | Chat-completions routing via user keys | `POST /v1/chat/completions` with `gk_` key routes through user's keys |
-|**Phase H — Frontend Dashboard**|  |  |
-|| 24 | Next.js dashboard | `cd frontend && npm run build` + `npm run verify` |
+| 16 | Load test + metrics | `npm run load` (4 numbers printed) |
+| 17 | Docker + Nginx deploy | `docker compose up -d --wait && npm run smoke -- --stream` |
+| 18 | Docs + demo | `npm run verify` + a manual five-minute clone test |
+|  | **Phase E — User Identity** |  |
+| 19 | User registration & gateway API key | `npm run verify` + `POST /v1/auth/register` returns `gateway_api_key` |
+| 20 | Gateway API key lifecycle | `POST /v1/auth/regenerate-key` invalidates old key, issues new one |
+|  | **Phase F — Provider Key Vault** |  |
+| 21 | Provider key storage backend | `test/unit/provider-key-store.test.ts` passes |
+| 22 | Provider key management routes | `GET/POST/PATCH/DELETE /v1/user/provider-keys` verified |
+|  | **Phase G — User-Aware Routing** |  |
+| 23 | Chat-completions routing via user keys | `POST /v1/chat/completions` with `gk_` key routes through user's keys |
+|  | **Phase H — Frontend Dashboard** |  |
+| 24 | Next.js dashboard | `cd frontend && npm run build` + `npm run verify` |
 
 ---
 
@@ -400,31 +400,41 @@ decision is what makes pooling possible later.
 ---
 ## 7. Progress
 
-> Block 1 was pulled forward into Block 2: the canonical types, `ProviderAdapter` contract
-> and a deterministic mock landed with it. Still outstanding from Block 1: the mock's own
-> RPM ceiling and injectable 429/500/timeout, plus its dedicated test file.
+> Blocks 19–23 (Phase E, F, G) were delivered together on `opencode/block-19-user-auth`:
+> `9f8bbac` migration · `fef9818` config + MASTER_ENCRYPTION_KEY · `7075051`/`cdf2e29` crypto helpers ·
+> `37f13c9` user + provider-key stores · `009196a` auth routes · `2fb6536` user-key routes ·
+> `10b988e` gateway-key middleware, schemas, server wiring · `03796ae` CORS (Phase H prerequisite).
+> Task 14 (Next.js scaffolding, Block 24) is in flight via agy.
+> Open item: no dedicated `test/unit/provider-key-store.test.ts` yet — provider-key crypto is covered
+> only indirectly via `http.test.ts` / the 344-test suite.
 
 | # | Block | Learn | Built | Tested |
 |---|---|---|---|---|
 | 0 | Repo & toolchain | — | ✅ | ✅ |
-| 1 | Canonical schema + mock adapter | ✅ | ◐ | ☐ |
+| 1 | Canonical schema + mock adapter | ✅ | ✅ | ✅ |
 | 2 | HTTP buffered path | ✅ | ✅ | ✅ |
-| 3 | Real adapters + credential pool | ☐ | ☐ | ☐ |
-| 4 | Free-model discovery | ☐ | ☐ | ☐ |
-| 5 | Model registry table | ☐ | ☐ | ☐ |
-| 6 | **Rate-limit ledger** | ☐ | ☐ | ☐ |
-| 7 | Error classification + retry-after | ☐ | ☐ | ☐ |
-| 8 | Circuit breaker / credential parking | ☐ | ☐ | ☐ |
-| 9 | Capacity-aware select + failover | ☐ | ☐ | ☐ |
-| 10 | Streaming (SSE) | ☐ | ☐ | ☐ |
-| 11 | Accounting + Postgres | ☐ | ☐ | ☐ |
-| 12 | Eval harness | ☐ | ☐ | ☐ |
-| 13 | `route()` + table store | ☐ | ☐ | ☐ |
-| 14 | User spend budget | ☐ | ☐ | ☐ |
-| 15 | Idempotency keys | ☑ | ☑ | ☑ |
-| 16 | Load test + metrics | ☐ | ☐ | ☐ |
-| 17 | Docker + Nginx deploy | ☐ | ☐ | ☐ |
-| 18 | Docs + demo | ☐ | ☐ | ☐ |
+| 3 | Real adapters + credential pool | ✅ | ✅ | ✅ |
+| 4 | Free-model discovery | ✅ | ✅ | ✅ |
+| 5 | Model registry table | ✅ | ✅ | ✅ |
+| 6 | **Rate-limit ledger** | ✅ | ✅ | ✅ |
+| 7 | Error classification + retry-after | ✅ | ✅ | ✅ |
+| 8 | Circuit breaker / credential parking | ✅ | ✅ | ✅ |
+| 9 | Capacity-aware select + failover | ✅ | ✅ | ✅ |
+| 10 | Streaming (SSE) | ✅ | ✅ | ✅ |
+| 11 | Accounting + Postgres | ✅ | ✅ | ✅ |
+| 12 | Eval harness | ✅ | ✅ | ✅ |
+| 13 | `route()` + table store | ✅ | ✅ | ✅ |
+| 14 | User spend budget | ✅ | ✅ | ✅ |
+| 15 | Idempotency keys | ✅ | ✅ | ✅ |
+| 16 | Load test + metrics | ✅ | ✅ | ✅ |
+| 17 | Docker + Nginx deploy | ✅ | ✅ | ✅ |
+| 18 | Docs + demo | ✅ | ✅ | ✅ |
+| 19 | User registration & gateway API key | ✅ | ✅ | ◐ |
+| 20 | Gateway API key lifecycle | ✅ | ✅ (absorbed into Block 19, commit `009196a`) | ◐ |
+| 21 | Provider key storage backend | ✅ | ✅ (`src/models/user-provider-key.ts`) | ◐ |
+| 22 | Provider key management routes | ✅ | ✅ (`src/http/routes/user-keys.ts`) | ✅ |
+| 23 | Chat-completions routing via user keys | ✅ | ✅ (`009196a` + `10b988e`) | ✅ |
+| 24 | Next.js dashboard | — | ◐ (Task 14 in flight) | ☐ |
 
 ## 8. Directory layout
 
@@ -438,6 +448,8 @@ src/
   routing/      store.ts, json-store.ts, eval-store.ts
   resilience/   breaker.ts, classify.ts, retry-after.ts
   budget/       limiter.ts, reserve.lua
+  models/       user.ts, user-provider-key.ts
+  lib/          crypto.ts (scrypt, AES-256-GCM, SHA-256)
   telemetry/    store.ts, logger.ts
   eval/         grade.ts, run.ts, prompts/
   config/       env.ts
@@ -462,7 +474,7 @@ directories — `AGENTS.md` carries the same map, and the two must stay in sync.
 - **Test runner:** `node:test` — zero dependencies.
 - **HTTP client:** native `fetch` only. No axios.
 - **Schema layer:** **TypeBox** (`@sinclair/typebox`) — native ajv integration, zero shims, types inferred from the schema so canonical types and HTTP schemas cannot drift.
-- **Gateway auth (Phase A):** `Authorization: Bearer <ADMIN_TOKEN>`, constant-time compare in `preHandler`. A `gateway_keys` table replaces it at Block 11.
+- **Gateway auth (Phase E, was Phase A):** two layers. (1) Shared admin token for internal/admin calls — constant-time compare in the `onRequest` hook. (2) User `gk_`-prefixed gateway keys (SHA-256 hashed in `users.gateway_key_hash`, plaintext shown once at register/regenerate) for `/v1/chat/completions` and `/v1/user/provider-keys`. Supersedes the Phase A shared-token plan; the `gateway_keys` table once earmarked for Block 11 was never created — keys live in `users`.
 - **Response headers:** `x-request-id`, `x-gateway-provider`, `x-gateway-model`, `x-gateway-attempts`, `x-gateway-latency-ms`, `x-gateway-tokens-estimated`, plus `retry-after` on 429/503.
 - **Timeouts:** 10s per attempt, 30s total request deadline. Both env-configurable.
 - **HTTP framework:** **Fastify 5**. Native JSON Schema validation, `fast-json-stringify` serialisation that strips unknown fields, pino logging built in, and `app.inject()` for hermetic route tests. See `docs/adr/0002-http-framework.md`.
@@ -478,10 +490,12 @@ directories — `AGENTS.md` carries the same map, and the two must stay in sync.
 
 ## 10. Open decisions
 
-- Budget unit: dollars, tokens, or both (Block 14).
-- Whether the public demo ships with real keys at all (Block 17).
-- Default spread policy when several candidates have equal capacity: round-robin or least-recently-used (Block 9).
-- Whether to expose per-credential health in the API response headers (Block 11).
+All four original open decisions are resolved as of Blocks 9/11/14/17:
+
+- **Budget unit** — dollars. Block 14 ships `worstCaseUsd` / `spentUsd` / `capUsd`, pre-dispatch atomic Lua reserve, 429 before dispatch. Tokens not tracked for budget purposes.
+- **Public demo ships with real keys** — no. `docker-compose.yml` injects no provider keys (dummy `ADMIN_TOKEN` only); load tests run against mock upstream; the demo path needs `.env` keys supplied by the operator.
+- **Spread policy on equal capacity** — least-recently-used (§3 routing order row 3; as-built in `select.ts` / execute ranking).
+- **Per-credential health in response headers** — not exposed. Response headers ship `x-request-id`, provider/model/attempts/latency/tokens-estimated only (§9). Revisit only if a consumer appears.
 
 ## 11. Environment
 
@@ -492,9 +506,11 @@ REDIS_URL=redis://...
 NVIDIA_NIM_KEYS=key1,key2      # comma-separated; several keys per provider is the point
 OPENROUTER_KEYS=key1
 TOKENHARBOR_KEYS=key1,key2
-MASTER_ENCRYPTION_KEY=         # 32-byte hex, read by the vault
-ADMIN_TOKEN=
+MASTER_ENCRYPTION_KEY=         # 32-byte hex (≥32 chars), AES-256-GCM for provider keys at rest
+ADMIN_TOKEN=                    # shared admin token for internal/admin calls
+CORS_ORIGIN=http://localhost:3000  # optional; default http://localhost:3000 (Block 19)
 LOG_LEVEL=info
+NODE_ENV=development
 ```
 
 `.env` is gitignored. `getCredential()` is the only read path for provider keys.

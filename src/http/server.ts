@@ -58,10 +58,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   const corsOrigin = deps.config.corsOrigin ?? DEFAULT_CORS_ORIGIN;
   app.addHook('onRequest', (_request, reply, done) => {
     reply.header('Access-Control-Allow-Origin', corsOrigin);
-    reply.header(
-      'Access-Control-Allow-Methods',
-      'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-    );
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     reply.header('Access-Control-Allow-Credentials', 'true');
 

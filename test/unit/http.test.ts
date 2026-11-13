@@ -284,7 +284,11 @@ test('http: every non-2xx returns the OpenAI error envelope', async (t) => {
     assertErrorEnvelope(res.json());
   }
 
-  const notFound = await app.inject({ method: 'GET', url: '/v1/does-not-exist', headers: { authorization: `Bearer ${config.adminToken}` } });
+  const notFound = await app.inject({
+    method: 'GET',
+    url: '/v1/does-not-exist',
+    headers: { authorization: `Bearer ${config.adminToken}` },
+  });
   assert.equal(notFound.statusCode, 404);
   assertErrorEnvelope(notFound.json());
 });

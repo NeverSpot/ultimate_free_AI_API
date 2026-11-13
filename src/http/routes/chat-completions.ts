@@ -26,7 +26,6 @@ import { buildRouterRuntime, type ChatRouterDeps, type RouterRuntime } from './r
 
 export type { ChatRouterDeps, RouterRuntime };
 
-
 const UNSUPPORTED_FIELDS = [
   'logprobs',
   'top_logprobs',
