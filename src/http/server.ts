@@ -9,6 +9,7 @@ import { registerChatCompletions } from './routes/chat-completions';
 import { registerHealthz, type HealthProbes } from './routes/healthz';
 import { registerAuthRoutes } from './routes/auth';
 import { registerUserKeyRoutes } from './routes/user-keys';
+import traceIdPlugin from './middleware/trace-id';
 import type { createGatewayKeyAuth } from './middleware/gateway-key-auth';
 import type { UserModel } from '../models/user';
 import type { UserProviderKeyModel } from '../models/user-provider-key';
@@ -116,6 +117,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       await gatewayKeyAuth.authenticate(request);
     });
   }
+
+  // Block 25: request tracing — every response carries x-request-id.
+  app.register(traceIdPlugin);
 
   registerHealthz(app, deps.probes);
   registerChatCompletions(app, deps);
