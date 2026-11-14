@@ -13,6 +13,7 @@ import traceIdPlugin from './middleware/trace-id';
 import metricsRoute from './routes/metrics';
 import cacheMiddleware from './middleware/cache-middleware';
 import { registerProvidersRoute } from './routes/providers';
+import { registerSpendCapRoutes } from './routes/spend-caps';
 import type { createGatewayKeyAuth } from './middleware/gateway-key-auth';
 import type { UserModel } from '../models/user';
 import type { UserProviderKeyModel } from '../models/user-provider-key';
@@ -139,6 +140,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     getUserId: (req) => req.user?.id ?? null,
     encryptionKey: deps.config.encryptionKey,
   });
+
+  registerSpendCapRoutes(app);
 
   // Block 28: graceful shutdown — stop accepting requests and close the server
   // on SIGTERM, then exit. `index.ts` installs its own handler for production;
