@@ -81,9 +81,11 @@ describe('organizations', { skip }, () => {
     };
   }
 
+  const suffix = String(Date.now());
+
   test('create org returns 201; listing keys requires membership', async () => {
-    const owner = await registerUser('alice', 'alice@example.com');
-    const nonMember = await registerUser('bob', 'bob@example.com');
+    const owner = await registerUser(`alice_${suffix}`, `alice_${suffix}@example.com`);
+    const nonMember = await registerUser(`bob_${suffix}`, `bob_${suffix}@example.com`);
     nonMemberUserId = nonMember.userId;
     nonMemberGatewayKey = nonMember.gatewayApiKey;
 
@@ -91,11 +93,11 @@ describe('organizations', { skip }, () => {
       method: 'POST',
       url: '/v1/orgs',
       headers: { authorization: `Bearer ${owner.gatewayApiKey}` },
-      payload: { name: 'Acme' },
+      payload: { name: `Acme_${suffix}` },
     });
     assert.equal(createRes.statusCode, 201);
     const body = JSON.parse(createRes.body);
-    assert.equal(body.name, 'Acme');
+    assert.equal(body.name, `Acme_${suffix}`);
     assert.ok(typeof body.id === 'string' && body.id.length > 0);
     orgId = body.id as string;
 
