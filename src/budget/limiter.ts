@@ -95,6 +95,34 @@ export function budgetReservationKey(userId: string, reservationId: string): str
 }
 
 /**
+ * Block 35: hard ceiling on a reservation against an org's monthly spend cap.
+ * Fail-open: a missing or unreadable `org_spend_caps` table never blocks dispatch.
+ */
+export async function checkOrgCap(
+  dbClient: DbExecutor,
+  orgId: string,
+  worstCaseUsd: number,
+): Promise<{ allowed: boolean; capUsd?: number; reason?: string }> {
+  try {
+    const { rows } = await dbClient.query<{ cap_usd: string | number }>(
+      'select cap_usd from org_spend_caps where org_id = $1 and period = $2 limit 1',
+      [orgId, 'monthly'],
+    );
+    const row = rows[0];
+    if (!row) {
+      return { allowed: true };
+    }
+    const cap = Number(row.cap_usd);
+    if (Number.isFinite(cap) && worstCaseUsd > cap) {
+      return { allowed: false, capUsd: cap, reason: 'org_cap_exceeded' };
+    }
+    return { allowed: true, capUsd: cap };
+  } catch {
+    return { allowed: true };
+  }
+}
+
+/**
  * Real Redis-backed budget limiter using atomic Lua scripts.
  */
 export function createBudgetLimiter(
@@ -134,6 +162,34 @@ export function createBudgetLimiter(
         const [ok, remainingStr, capStr, _reservedStr, detail] = raw;
 
         if (ok === 1) {
+          // Block 35: team-level spend cap — hard ceiling checked before the
+          // reservation is confirmed. Fail-open: if org-membership infra is
+          // absent (Block 34 not merged yet) or the DB is unreachable, the
+          // user-budget reservation stands.
+          if (dbClient) {
+            let orgId: string | null = null;
+            try {
+              const orgRow = await dbClient.query<{ org_id: string }>(
+                'select org_id from org_members where user_id = $1 limit 1',
+                [userId],
+              );
+              orgId = orgRow.rows[0]?.org_id ?? null;
+            } catch {
+              // org_members table not present yet; no org cap to enforce.
+            }
+            if (orgId !== null) {
+              const capCheck = await checkOrgCap(dbClient, orgId, worstCaseUsd);
+              if (!capCheck.allowed) {
+                return {
+                  ok: false,
+                  remainingUsd: 0,
+                  capUsd: capCheck.capUsd ?? 0,
+                  reason: capCheck.reason ?? 'org_cap_exceeded',
+                };
+              }
+            }
+          }
+
           return {
             ok: true,
             reservationId,
