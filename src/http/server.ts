@@ -13,9 +13,11 @@ import traceIdPlugin from './middleware/trace-id';
 import metricsRoute from './routes/metrics';
 import cacheMiddleware from './middleware/cache-middleware';
 import { registerProvidersRoute } from './routes/providers';
+import organizationsRoute from './routes/organizations';
 import type { createGatewayKeyAuth } from './middleware/gateway-key-auth';
 import type { UserModel } from '../models/user';
 import type { UserProviderKeyModel } from '../models/user-provider-key';
+import type { OrganizationModel } from '../models/organization';
 
 export interface ServerDeps {
   config: Config;
@@ -31,6 +33,7 @@ export interface ServerDeps {
   userStore?: UserModel;
   providerKeyStore?: UserProviderKeyModel;
   gatewayKeyAuth?: ReturnType<typeof createGatewayKeyAuth>;
+  orgStore?: OrganizationModel;
 }
 
 declare module 'fastify' {
@@ -150,6 +153,12 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   // Block 30: provider health endpoint at GET /v1/providers/health.
   registerProvidersRoute(app);
+
+  // Block 34: organizations & team key pools — enabled when a db-backed
+  // orgStore is provided (index.ts does not wire a database client today).
+  if (deps.orgStore) {
+    app.register(organizationsRoute, { orgStore: deps.orgStore });
+  }
 
   return app;
 }
