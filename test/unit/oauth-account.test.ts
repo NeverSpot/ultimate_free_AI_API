@@ -57,7 +57,11 @@ test('oauth-account: createAccount inserts and encrypts the access token', async
   const token = 'plaintext-access-token';
   const raw_profile = { sub: 'abc-123', email: 'user@example.com' };
   const stored = 'stored-encrypted-access-token';
-  const { db, captured } = makeDb([{ rows: [fullRow({ access_token_encrypted: stored, raw_profile: JSON.stringify(raw_profile) })] }]);
+  const { db, captured } = makeDb([
+    {
+      rows: [fullRow({ access_token_encrypted: stored, raw_profile: JSON.stringify(raw_profile) })],
+    },
+  ]);
   const model = createOAuthAccountModel(db, MASTER_KEY);
 
   const account = await model.createAccount({
@@ -92,10 +96,7 @@ test('oauth-account: findByProviderUserId returns null when no account exists', 
   const account = await model.findByProviderUserId('google', 'nope');
   assert.equal(account, null);
   assert.equal(captured.sql!.includes('from oauth_accounts'), true);
-  assert.equal(
-    captured.sql!.includes('where provider = $1 and provider_user_id = $2'),
-    true,
-  );
+  assert.equal(captured.sql!.includes('where provider = $1 and provider_user_id = $2'), true);
 });
 
 test('oauth-account: findByProviderUserId maps an existing row', async () => {
