@@ -19,8 +19,8 @@ import {
   type LruMap,
   type TaskBucket,
   classifyTaskBucket,
-  createDefaultEvalTable,
 } from '../routing/select';
+import { loadEvalTable } from '../routing/eval-table-loader';
 import type { LedgerClient } from '../limits/redis';
 import type { AccountingStore } from '../telemetry/store';
 import type { BudgetLimiter } from '../budget/limiter';
@@ -195,7 +195,7 @@ export async function execute(
     totalDeadlineMs = 30_000,
     attemptTimeoutMs = 10_000,
     taskBucket,
-    evalTable = createDefaultEvalTable(),
+    evalTable = loadEvalTable(),
     lru = new Map<string, number>(),
     ledgerSnapshot = new Map(),
     parking,
@@ -507,7 +507,7 @@ export async function* executeStream(
     totalDeadlineMs = 30_000,
     attemptTimeoutMs = 10_000,
     taskBucket,
-    evalTable = createDefaultEvalTable(),
+    evalTable = loadEvalTable(),
     lru = new Map<string, number>(),
     ledgerSnapshot = new Map(),
     parking,

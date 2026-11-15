@@ -13,7 +13,8 @@ import type { CanonicalChunk, CanonicalRequest, CanonicalResponse } from '../../
 import { resolvePolicy, type LimitPolicy } from '../../limits/policy';
 import { createProviderRegistry, type ProviderRegistry } from '../../providers/registry';
 import type { ProviderAdapter } from '../../providers/types';
-import { createDefaultEvalTable, type EvalTable, type LruMap } from '../../routing/select';
+import { type EvalTable, type LruMap } from '../../routing/select';
+import { loadEvalTable } from '../../routing/eval-table-loader';
 import { ApiError, headersForError, statusForError, toEnvelope } from '../errors';
 import { extractIdempotencyKey, replayResponse } from '../middleware/idempotency';
 import { ChatRequest, ChatResponse } from '../schemas';
@@ -92,7 +93,7 @@ export function registerChatCompletions(
   const server = app.withTypeProvider<TypeBoxTypeProvider>();
   const now = deps.now ?? Date.now;
   const lru: LruMap = deps.lru ?? new Map<string, number>();
-  const evalTable: EvalTable = deps.evalTable ?? createDefaultEvalTable();
+  const evalTable: EvalTable = deps.evalTable ?? loadEvalTable();
 
   const registry = deps.registry ?? createProviderRegistry(deps.adapters ?? [deps.provider]);
   const adapterMap = buildAdapterMap(registry, deps.provider);
