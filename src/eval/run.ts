@@ -361,10 +361,7 @@ export async function main(): Promise<void> {
   console.log(report.markdown);
 
   const resultsDir = process.cwd();
-  fs.writeFileSync(
-    path.join(resultsDir, 'eval-results.json'),
-    JSON.stringify(report, null, 2),
-  );
+  fs.writeFileSync(path.join(resultsDir, 'eval-results.json'), JSON.stringify(report, null, 2));
   fs.writeFileSync(path.join(resultsDir, 'eval-results.md'), report.markdown);
 
   if (!quiet) {

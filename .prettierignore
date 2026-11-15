@@ -6,3 +6,6 @@ package-lock.json
 *.md
 docs/**/*.md
 load/*.json
+frontend/.next/**
+eval-results.json
+frontend/next-env.d.ts
