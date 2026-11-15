@@ -1,0 +1,50 @@
+{
+  "model": "mock-model",
+  "runsPerPrompt": 3,
+  "buckets": {
+    "json_extraction": {
+      "bucket": "json_extraction",
+      "promptsCount": 25,
+      "runsPerPrompt": 3,
+      "totalRuns": 75,
+      "passedRuns": 75,
+      "passAt1": 1,
+      "avgScore": 1
+    },
+    "math": {
+      "bucket": "math",
+      "promptsCount": 25,
+      "runsPerPrompt": 3,
+      "totalRuns": 75,
+      "passedRuns": 75,
+      "passAt1": 1,
+      "avgScore": 1
+    },
+    "code_generation": {
+      "bucket": "code_generation",
+      "promptsCount": 25,
+      "runsPerPrompt": 3,
+      "totalRuns": 75,
+      "passedRuns": 75,
+      "passAt1": 1,
+      "avgScore": 1
+    },
+    "structured_extraction": {
+      "bucket": "structured_extraction",
+      "promptsCount": 25,
+      "runsPerPrompt": 3,
+      "totalRuns": 75,
+      "passedRuns": 75,
+      "passAt1": 1,
+      "avgScore": 1
+    }
+  },
+  "overall": {
+    "totalPrompts": 100,
+    "totalRuns": 300,
+    "totalPassed": 300,
+    "passAt1": 1,
+    "avgScore": 1
+  },
+  "markdown": "# Eval Benchmark Results (n=3 per cell)\n\n**Model:** `mock-model`  \n**Runs per prompt (n):** 3  \n**Total prompts:** 100 (25 per bucket)  \n**Total runs:** 300  \n\n### Bucket Performance (n=3 per cell)\n\n| Bucket | Prompts | Runs (n=3/cell) | Pass Count | pass@1 Rate (n=3/cell) | Avg Score |\n|---|---|---|---|---|---|\n| `json_extraction` | 25 | 75 | 75 | 100.0% (n=3) | 1.000 |\n| `math` | 25 | 75 | 75 | 100.0% (n=3) | 1.000 |\n| `code_generation` | 25 | 75 | 75 | 100.0% (n=3) | 1.000 |\n| `structured_extraction` | 25 | 75 | 75 | 100.0% (n=3) | 1.000 |\n| **Overall** | **100** | **300** | **300** | **100.0% (n=3)** | **1.000** |\n\n### Model Matrix (n=3 per cell)\n\n| Model | json_extraction (n=3) | math (n=3) | code_generation (n=3) | structured_extraction (n=3) | Overall (n=3) |\n|---|---|---|---|---|---|\n| `mock-model` | 100.0% (n=3) | 100.0% (n=3) | 100.0% (n=3) | 100.0% (n=3) | 100.0% (n=3) |\n"
+}
