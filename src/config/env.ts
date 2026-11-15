@@ -9,10 +9,16 @@ export interface Config {
   nodeEnv: string;
   sseHeadersEnabled?: boolean;
   corsOrigin?: string;
+  googleClientId?: string;
+  googleClientSecret?: string;
+  githubClientId?: string;
+  githubClientSecret?: string;
+  oauthCallbackBase?: string;
 }
 
 const DEFAULT_PORT = 8080;
 export const DEFAULT_CORS_ORIGIN = 'http://localhost:3000';
+export const DEFAULT_OAUTH_CALLBACK_BASE = 'http://localhost:8080';
 const DEFAULT_MAX_BODY_BYTES = 2_097_152;
 const DEFAULT_ATTEMPT_TIMEOUT_MS = 10_000;
 const DEFAULT_REQUEST_DEADLINE_MS = 30_000;
@@ -72,6 +78,12 @@ export function loadConfig(raw: NodeJS.ProcessEnv): Config {
 
   const corsOrigin = raw.CORS_ORIGIN?.trim() || DEFAULT_CORS_ORIGIN;
 
+  const googleClientId = raw.GOOGLE_CLIENT_ID?.trim() ?? '';
+  const googleClientSecret = raw.GOOGLE_CLIENT_SECRET?.trim() ?? '';
+  const githubClientId = raw.GITHUB_CLIENT_ID?.trim() ?? '';
+  const githubClientSecret = raw.GITHUB_CLIENT_SECRET?.trim() ?? '';
+  const oauthCallbackBase = raw.OAUTH_CALLBACK_BASE?.trim() || DEFAULT_OAUTH_CALLBACK_BASE;
+
   if (problems.length > 0) {
     throw new Error(
       `Invalid configuration:\n${problems.map((problem) => `  - ${problem}`).join('\n')}`,
@@ -89,6 +101,11 @@ export function loadConfig(raw: NodeJS.ProcessEnv): Config {
     nodeEnv,
     sseHeadersEnabled,
     corsOrigin,
+    googleClientId,
+    googleClientSecret,
+    githubClientId,
+    githubClientSecret,
+    oauthCallbackBase,
   };
 }
 
