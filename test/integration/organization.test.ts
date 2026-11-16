@@ -25,6 +25,7 @@ const config: Config = {
   requestDeadlineMs: 30_000,
   logLevel: 'silent',
   nodeEnv: 'test',
+  jwtSecret: 'test-secret',
 };
 
 const provider = new MockProviderAdapter({ id: 'mock', model: 'mock-model' });
