@@ -312,10 +312,13 @@ test('SSE: stream: true response ends with [DONE] and uses text/event-stream', a
     clock: () => NOW,
   });
   const credential = makeCred('cred-1');
+  const candidates = [
+    { modelId: 'mock-model' as string, credential, providerId: 'mock', adapterId: 'mock' },
+  ];
 
   const app = Fastify({ logger: false });
   app.decorateRequest('gatewayRequestId', 'req-sse-1');
-  registerChatCompletions(app, { config, provider, credential });
+  registerChatCompletions(app, { config, provider, credential, candidates });
   t.after(async () => app.close());
 
   const res = await app.inject({
@@ -361,10 +364,13 @@ test('SSE: each data line is valid JSON with the chat.completion.chunk shape', a
     clock: () => NOW,
   });
   const credential = makeCred('cred-1');
+  const candidates = [
+    { modelId: 'mock-model' as string, credential, providerId: 'mock', adapterId: 'mock' },
+  ];
 
   const app = Fastify({ logger: false });
   app.decorateRequest('gatewayRequestId', 'req-sse-shape');
-  registerChatCompletions(app, { config, provider, credential });
+  registerChatCompletions(app, { config, provider, credential, candidates });
   t.after(async () => app.close());
 
   const res = await app.inject({

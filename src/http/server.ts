@@ -12,6 +12,7 @@ import { registerUserKeyRoutes } from './routes/user-keys';
 import traceIdPlugin from './middleware/trace-id';
 import metricsRoute from './routes/metrics';
 import cacheMiddleware from './middleware/cache-middleware';
+import { registerModelsRoute } from './routes/models';
 import { registerProvidersRoute } from './routes/providers';
 import organizationsRoute from './routes/organizations';
 import { registerSpendCapRoutes } from './routes/spend-caps';
@@ -26,6 +27,12 @@ export interface ServerDeps {
   config: Config;
   /** Block 3 swaps the real adapter in; routes never change. */
   provider: ProviderAdapter;
+  /**
+   * Real provider adapters (openrouter, nvidia, tokenharbor, …). When omitted the
+   * registry contains only `provider`, so BYOK credentials for any other provider
+   * are silently skipped and chat fails with "All routing attempts failed".
+   */
+  adapters?: ProviderAdapter[];
   /** Phase A: one fixed credential. */
   credential: Credential;
   now?: () => number;
@@ -165,6 +172,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   registerHealthz(app, deps.probes);
   registerChatCompletions(app, deps);
+  registerModelsRoute(app);
 
   // Auth is a core route. If production is built without a user store, fail at
   // startup rather than letting every registration request 500 on an undefined store.

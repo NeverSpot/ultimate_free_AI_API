@@ -14,6 +14,7 @@ import { resolvePolicy, type LimitPolicy } from '../../limits/policy';
 import { createProviderRegistry, type ProviderRegistry } from '../../providers/registry';
 import type { ProviderAdapter } from '../../providers/types';
 import { type EvalTable, type LruMap } from '../../routing/select';
+import { isFreeRequest, resolveFreeCandidates } from '../../routing/free-model';
 import { loadEvalTable } from '../../routing/eval-table-loader';
 import { ApiError, headersForError, statusForError, toEnvelope } from '../errors';
 import { extractIdempotencyKey, replayResponse } from '../middleware/idempotency';
@@ -140,7 +141,17 @@ export function registerChatCompletions(
       };
 
       const userCredentials = await buildUserCredentials(req, deps);
-      const candidates = buildCandidates(deps, registry, canonical, userCredentials);
+
+      // "free" / "auto" / no model -> offer every free model the caller can
+      // reach, then let select() rank them by the project's signal order.
+      let candidates;
+      if (isFreeRequest(canonical.model) && userCredentials !== undefined) {
+        const freeCandidates = await resolveFreeCandidates(registry, userCredentials);
+        if (freeCandidates.length > 0) {
+          candidates = freeCandidates;
+        }
+      }
+      candidates ??= buildCandidates(deps, registry, canonical, userCredentials);
       const policies = deps.policies ?? buildPolicies(candidates);
 
       if (isStream) {
@@ -474,6 +485,11 @@ function buildCandidates(
     return [...deps.candidates];
   }
 
+  // Strict BYOK is enforced in buildUserCredentials(): if req.user is set
+  // (gk_ key auth), it returns the user's saved keys or [] — never undefined.
+  // buildCandidates then returns [] for empty list → 503 exhausted.
+  // The pool/credential fallbacks below only apply to admin/test requests
+  // where req.user is undefined (no gk_ key).
   if (userCredentials !== undefined) {
     const candidates: Candidate[] = [];
     for (const credential of userCredentials) {

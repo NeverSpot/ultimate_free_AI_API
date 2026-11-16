@@ -5,6 +5,7 @@ import { buildServer } from './http/server';
 import { createUserModel } from './models/user';
 import { createUserProviderKeyModel } from './models/user-provider-key';
 import { MockProviderAdapter } from './providers/mock';
+import { defaultAdapters } from './providers/defaults';
 import type { Credential } from './providers/types';
 
 async function main(): Promise<void> {
@@ -34,6 +35,10 @@ async function main(): Promise<void> {
     config,
     provider,
     credential,
+    // Real provider adapters so BYOK credentials (openrouter/nvidia/tokenharbor)
+    // resolve in the router. Without these, every real provider is silently
+    // skipped and chat fails with "All routing attempts failed".
+    adapters: defaultAdapters(),
     logger: true,
     userStore,
     providerKeyStore,

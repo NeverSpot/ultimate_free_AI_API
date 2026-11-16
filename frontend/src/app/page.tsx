@@ -10,15 +10,15 @@ export default function Home() {
       </div>
 
       <h1 className="mt-8 max-w-3xl text-5xl font-bold tracking-tight text-slate-100 sm:text-6xl">
-        One unified API.
+        Many free models.
         <br />
-        <span className="text-slate-400">Bring your own free keys.</span>
+        <span className="text-slate-400">One API key.</span>
       </h1>
 
       <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-400">
-        Pool free-tier developer keys from OpenRouter, NVIDIA NIM, and TokenHarbor. Get
-        rate-limit-aware capacity routing and automatic failover behind a single, drop-in OpenAI
-        endpoint.
+        Free-tier keys are capped per provider. This gateway pools the free models from OpenRouter,
+        NVIDIA NIM, TokenHarbor and more behind a single OpenAI-compatible endpoint — so a request
+        that would 429 on one provider is routed to another that still has capacity.
       </p>
 
       {/* Landing CTAs */}
