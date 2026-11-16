@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import Link from 'next/link';
 import React from 'react';
+import { AuthNav } from '@/components/auth-nav';
 import './globals.css';
 
 const geistSans = Geist({
@@ -37,14 +38,7 @@ export default function RootLayout({
             <Link href="/" className="text-lg font-semibold tracking-tight text-slate-100">
               LLM Gateway
             </Link>
-            <nav className="flex items-center gap-4 text-sm text-slate-300">
-              <Link href="/login" className="hover:text-slate-100">
-                Login
-              </Link>
-              <Link href="/keys" className="hover:text-slate-100">
-                Keys
-              </Link>
-            </nav>
+            <AuthNav />
           </div>
         </header>
         <main className="flex-1">{children}</main>
