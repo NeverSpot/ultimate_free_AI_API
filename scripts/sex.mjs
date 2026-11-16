@@ -19,6 +19,8 @@
 
 import { spawn } from 'node:child_process';
 import process from 'node:process';
+import { readFileSync } from 'node:fs';
+import { get } from 'node:http';
 
 const args = new Set(process.argv.slice(2));
 const useDocker = !args.has('--no-docker');
@@ -32,7 +34,7 @@ let shuttingDown = false;
 /** Read PORT from .env, defaulting to 8080. */
 function readPort() {
   try {
-    const env = require('fs').readFileSync('.env', 'utf8');
+    const env = readFileSync('.env', 'utf8');
     const m = env.match(/^PORT=(\d+)/m);
     return m ? Number(m[1]) : 8080;
   } catch {
@@ -74,8 +76,20 @@ async function waitFor(url, timeoutMs, label) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(url);
-      if (res.ok) return true;
+      await new Promise((resolve, reject) => {
+        const req = get(url, (res) => {
+          if (res.statusCode === 200) resolve(true);
+          else resolve(false);
+        });
+        req.on('error', reject);
+        req.setTimeout(1000, () => {
+          req.destroy(new Error('timeout'));
+        });
+      }).then((ok) => {
+        if (ok) return true;
+        throw new Error('not ready');
+      });
+      return;
     } catch {
       // not up yet
     }
