@@ -9,6 +9,8 @@ export interface Config {
   nodeEnv: string;
   sseHeadersEnabled?: boolean;
   corsOrigin?: string;
+  /** HS256 secret for the httpOnly session cookie. Optional outside production. */
+  jwtSecret?: string;
   googleClientId?: string;
   googleClientSecret?: string;
   githubClientId?: string;
@@ -78,6 +80,13 @@ export function loadConfig(raw: NodeJS.ProcessEnv): Config {
 
   const corsOrigin = raw.CORS_ORIGIN?.trim() || DEFAULT_CORS_ORIGIN;
 
+  const jwtSecret = raw.JWT_SECRET?.trim() || undefined;
+  if (jwtSecret === undefined && nodeEnv === 'production') {
+    problems.push('JWT_SECRET is required in production');
+  } else if (jwtSecret !== undefined && nodeEnv === 'production' && jwtSecret.length < 32) {
+    problems.push('JWT_SECRET must be at least 32 characters in production');
+  }
+
   const googleClientId = raw.GOOGLE_CLIENT_ID?.trim() ?? '';
   const googleClientSecret = raw.GOOGLE_CLIENT_SECRET?.trim() ?? '';
   const githubClientId = raw.GITHUB_CLIENT_ID?.trim() ?? '';
@@ -101,6 +110,7 @@ export function loadConfig(raw: NodeJS.ProcessEnv): Config {
     nodeEnv,
     sseHeadersEnabled,
     corsOrigin,
+    jwtSecret,
     googleClientId,
     googleClientSecret,
     githubClientId,
