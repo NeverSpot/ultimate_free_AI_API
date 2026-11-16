@@ -28,6 +28,7 @@
     "mock:down": "node --import tsx load/mock-down.ts",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
+    "sex": "node scripts/sex.mjs",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "devDependencies": {
