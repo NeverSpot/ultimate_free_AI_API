@@ -61,6 +61,16 @@ export function createUserModel(db: DbExecutor) {
     return result.rows[0] ?? null;
   }
 
+  async function findById(
+    userId: string,
+  ): Promise<{ id: string; username: string; email: string } | null> {
+    const result = await db.query<{ id: string; username: string; email: string }>(
+      `select id, username, email from users where id = $1`,
+      [userId],
+    );
+    return result.rows[0] ?? null;
+  }
+
   async function findByGatewayApiKeyHash(
     gatewayApiKeyHash: string,
   ): Promise<{ id: string; username: string } | null> {
@@ -105,6 +115,7 @@ export function createUserModel(db: DbExecutor) {
     createUser,
     findByUsername,
     findByEmail,
+    findById,
     findByGatewayApiKeyHash,
     verifyPassword,
     setGatewayApiKeyHash,

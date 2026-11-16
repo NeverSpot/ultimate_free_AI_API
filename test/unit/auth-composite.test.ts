@@ -5,6 +5,7 @@ import type { Config } from '../../src/config/env';
 import { buildServer } from '../../src/http/server';
 import { createGatewayKeyAuth } from '../../src/http/middleware/gateway-key-auth';
 import { sha256Hex } from '../../src/lib/crypto';
+import { signJwt } from '../../src/lib/jwt';
 import type { UserModel } from '../../src/models/user';
 import type { UserProviderKeyModel } from '../../src/models/user-provider-key';
 import { MockProviderAdapter } from '../../src/providers/mock';
@@ -37,6 +38,8 @@ function fakeUserStore(): UserModel {
     },
     findByUsername: async () => null,
     findByEmail: async () => null,
+    findById: async (id: string) =>
+      id === 'u1' ? { id: 'u1', username: 'alice', email: 'alice@example.com' } : null,
     findByGatewayApiKeyHash: async () => null,
     verifyPassword: async () => null,
     setGatewayApiKeyHash: async () => {
@@ -162,5 +165,61 @@ test('composite auth: invalid JWT + invalid gateway key -> 401', async (t) => {
     url: '/v1/user/keys',
     headers: { cookie: 'jwt=bad', authorization: 'Bearer gk_wrong' },
   });
+  assert.equal(res.statusCode, 401, res.body);
+});
+
+test('composite auth: JWT session reaches /v1/user/me with email', async (t) => {
+  const app = makeApp();
+  t.after(async () => {
+    await app.close();
+  });
+
+  const res = await app.inject({
+    method: 'GET',
+    url: '/v1/user/me',
+    headers: { cookie: 'jwt=valid' },
+  });
+  assert.equal(res.statusCode, 200, res.body);
+  assert.deepEqual(res.json(), { id: 'u1', username: 'alice', email: 'alice@example.com' });
+  assert.equal(res.headers['cache-control'], 'no-store');
+});
+
+test('composite auth: real signed JWT reaches /v1/user/keys', async (t) => {
+  const app = buildServer({
+    config,
+    provider,
+    credential,
+    logger: false,
+    userStore: fakeUserStore(),
+    providerKeyStore: fakeProviderKeyStore(),
+    gatewayKeyAuth,
+  });
+  t.after(async () => {
+    await app.close();
+  });
+
+  const token = signJwt({ userId: 'u1', username: 'alice' }, config.jwtSecret!);
+  const res = await app.inject({
+    method: 'GET',
+    url: '/v1/user/keys',
+    headers: { cookie: `jwt=${token}` },
+  });
+  assert.equal(res.statusCode, 200, res.body);
+
+  const tampered = await app.inject({
+    method: 'GET',
+    url: '/v1/user/keys',
+    headers: { cookie: `jwt=${token}tampered` },
+  });
+  assert.equal(tampered.statusCode, 401, tampered.body);
+});
+
+test('composite auth: /v1/user/me without a session -> 401', async (t) => {
+  const app = makeApp();
+  t.after(async () => {
+    await app.close();
+  });
+
+  const res = await app.inject({ method: 'GET', url: '/v1/user/me' });
   assert.equal(res.statusCode, 401, res.body);
 });

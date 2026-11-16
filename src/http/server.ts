@@ -16,6 +16,8 @@ import { registerProvidersRoute } from './routes/providers';
 import organizationsRoute from './routes/organizations';
 import { registerSpendCapRoutes } from './routes/spend-caps';
 import type { createGatewayKeyAuth } from './middleware/gateway-key-auth';
+import { createJwtAuth } from './middleware/jwt-auth';
+import { registerUserRoutes } from './routes/user';
 import type { UserModel } from '../models/user';
 import type { UserProviderKeyModel } from '../models/user-provider-key';
 import type { OrganizationModel } from '../models/organization';
@@ -127,7 +129,15 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   cacheMiddleware(app);
 
   const gatewayKeyAuth = deps.gatewayKeyAuth;
-  const jwtCookieAuth = deps.jwtCookieAuth;
+  const userStore = deps.userStore;
+  const jwtCookieAuth =
+    deps.jwtCookieAuth ??
+    (userStore && deps.config.jwtSecret
+      ? createJwtAuth({
+          jwtSecret: deps.config.jwtSecret,
+          findUserById: (id) => userStore.findById(id),
+        })
+      : undefined);
 
   if (gatewayKeyAuth || jwtCookieAuth) {
     app.addHook('onRequest', async (request) => {
@@ -164,6 +174,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       jwtSecret: deps.config.jwtSecret,
       nodeEnv: deps.config.nodeEnv,
     });
+    registerUserRoutes(app, { userStore: deps.userStore });
   } else if (deps.config.nodeEnv === 'production') {
     throw new Error('buildServer: userStore is required when NODE_ENV=production');
   }

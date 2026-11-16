@@ -43,6 +43,17 @@ function createFakeUserStore(): UserModel {
     return null;
   }
 
+  async function findById(
+    userId: string,
+  ): Promise<{ id: string; username: string; email: string } | null> {
+    for (const user of usersByName.values()) {
+      if (user.id === userId) {
+        return { id: user.id, username: user.username, email: user.email };
+      }
+    }
+    return null;
+  }
+
   async function createUser({
     username,
     email,
@@ -99,6 +110,7 @@ function createFakeUserStore(): UserModel {
     createUser,
     findByUsername,
     findByEmail,
+    findById,
     findByGatewayApiKeyHash,
     verifyPassword,
     setGatewayApiKeyHash,
@@ -140,6 +152,18 @@ describe('POST /v1/auth/register', () => {
       assert.match(String(cookie), /^jwt=/);
       assert.match(String(cookie), /HttpOnly/);
       assert.match(String(cookie), /SameSite=Strict/);
+
+      const me = await app.inject({
+        method: 'GET',
+        url: '/v1/user/me',
+        headers: { cookie: String(cookie).split(';')[0] },
+      });
+      assert.equal(me.statusCode, 200, me.body);
+      assert.deepEqual(me.json(), {
+        id: body.user.id,
+        username: 'alice',
+        email: 'alice@example.com',
+      });
     } finally {
       await app.close();
     }
