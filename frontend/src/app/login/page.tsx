@@ -1,17 +1,31 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { FormEvent, Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Check, Copy } from 'lucide-react';
 import { api, type LoginResponse, type RegisterResponse } from '@/lib/api';
 
 export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center px-4 py-20">
+          <div className="h-9 w-72 animate-pulse rounded-xl bg-slate-800/60" />
+        </div>
+      }
+    >
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
   const router = useRouter();
-  const [tab, setTab] = useState<'signin' | 'register'>(() => {
-    if (typeof window === 'undefined') return 'signin';
-    const params = new URLSearchParams(window.location.search);
-    return params.get('tab') === 'register' ? 'register' : 'signin';
-  });
+  const searchParams = useSearchParams();
+  const tab: 'signin' | 'register' =
+    searchParams.get('tab') === 'register' ? 'register' : 'signin';
+  const setTab = (next: 'signin' | 'register') =>
+    router.replace(next === 'register' ? '/login?tab=register' : '/login');
 
   // Sign-in state
   const [signInUsername, setSignInUsername] = useState('');
@@ -40,6 +54,10 @@ export default function LoginPage() {
       });
 
       const user = { userId: data.userId, username: data.username };
+      // Drop any key left by a previous user so /keys never shows a stale key
+      // while /me names someone else. The server key is not rotated here.
+      localStorage.removeItem('gateway_api_key');
+      localStorage.removeItem('gateway_key');
       localStorage.setItem('user', JSON.stringify(user));
 
       router.push('/keys');
