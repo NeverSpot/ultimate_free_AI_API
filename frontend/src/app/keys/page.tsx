@@ -1,9 +1,10 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { FormEvent, useEffect, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, Copy, X, Edit2, Trash2, RefreshCw, Loader2 } from 'lucide-react';
 import { api, type KeySummary, type ListKeysResponse, type RegenerateKeyResponse } from '@/lib/api';
+import { useSession } from '@/hooks/use-session';
 
 type ProviderId = 'openrouter' | 'nvidia-nim' | 'tokenharbor';
 
@@ -23,9 +24,10 @@ function getProviderName(id: ProviderId): string {
   return p ? p.name : id;
 }
 
-// localStorage-backed values are read through `useSyncExternalStore`: the
-// server snapshot is empty, so the first client render matches the server HTML,
-// and React re-renders with the stored session after hydration.
+// The gateway key stays in localStorage through `useSyncExternalStore`: the
+// server snapshot is null, so the first client render matches the server HTML,
+// and React re-renders with the stored key after hydration. Auth itself comes
+// from the session cookie via `useSession`, never from localStorage.
 const STORAGE_CHANGE_EVENT = 'gateway-storage-change';
 
 function subscribeToStorage(onChange: () => void): () => void {
@@ -37,33 +39,13 @@ function subscribeToStorage(onChange: () => void): () => void {
   };
 }
 
-interface StoredSession {
-  gatewayKey: string | null;
-  user: { userId?: string; username: string } | null;
+function readGatewayKeySnapshot(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('gateway_api_key') || localStorage.getItem('gateway_key');
 }
 
-const SERVER_SNAPSHOT = '';
-const NO_SESSION: StoredSession = { gatewayKey: null, user: null };
-
-// One snapshot for the whole session so `hydrated` and the stored values flip
-// together; separate snapshots could briefly report "hydrated, logged out".
-function readSessionSnapshot(): string {
-  if (typeof window === 'undefined') return SERVER_SNAPSHOT;
-  const gatewayKey = localStorage.getItem('gateway_api_key') || localStorage.getItem('gateway_key');
-  const rawUser = localStorage.getItem('user');
-  let user: StoredSession['user'] = null;
-  if (rawUser) {
-    try {
-      user = JSON.parse(rawUser) as StoredSession['user'];
-    } catch {
-      user = null;
-    }
-  }
-  return JSON.stringify({ gatewayKey, user });
-}
-
-function getServerSnapshot(): string {
-  return SERVER_SNAPSHOT;
+function getServerSnapshot(): string | null {
+  return null;
 }
 
 function storeGatewayKey(key: string): void {
@@ -74,21 +56,13 @@ function storeGatewayKey(key: string): void {
 
 export default function KeysPage() {
   const router = useRouter();
+  const { user, loading: sessionLoading, error: sessionError } = useSession();
 
-  const sessionSnapshot = useSyncExternalStore(
+  const gatewayKey = useSyncExternalStore(
     subscribeToStorage,
-    readSessionSnapshot,
+    readGatewayKeySnapshot,
     getServerSnapshot,
   );
-  const hydrated = sessionSnapshot !== SERVER_SNAPSHOT;
-  const { gatewayKey, user } = useMemo<StoredSession>(() => {
-    if (!sessionSnapshot) return NO_SESSION;
-    try {
-      return JSON.parse(sessionSnapshot) as StoredSession;
-    } catch {
-      return NO_SESSION;
-    }
-  }, [sessionSnapshot]);
 
   const [fingerprints, setFingerprints] = useState<Record<ProviderId, string>>({
     openrouter: '',
@@ -126,14 +100,9 @@ export default function KeysPage() {
   const [regenError, setRegenError] = useState('');
 
   useEffect(() => {
-    if (!hydrated) return;
-
-    if (!gatewayKey) {
-      // Only unauthenticated visitors go back to login. A logged-in user with
-      // no stored key can generate one from this page via "Get New".
-      if (!user) {
-        router.push('/login');
-      }
+    if (sessionLoading || sessionError) return; // still checking /me, or /me errored
+    if (!user) {
+      router.push('/login');
       return;
     }
 
@@ -169,7 +138,7 @@ export default function KeysPage() {
     return () => {
       cancelled = true;
     };
-  }, [hydrated, gatewayKey, user, router]);
+  }, [sessionLoading, sessionError, user, router]);
 
   async function copyGatewayKey() {
     if (!gatewayKey) return;
@@ -185,10 +154,7 @@ export default function KeysPage() {
   async function handleRegenerateKey(e: FormEvent) {
     e.preventDefault();
     const username = user?.username;
-    if (!username) {
-      setRegenError('Username not found. Please log in again.');
-      return;
-    }
+    if (!username) return;
     if (!regenPassword) {
       setRegenError('Password is required to regenerate your key');
       return;
@@ -217,8 +183,8 @@ export default function KeysPage() {
   }
 
   async function submitProviderKey(provider: ProviderId) {
-    if (!gatewayKey) {
-      setError('Generate your gateway key first');
+    if (!user) {
+      setError('Please log in to manage provider keys');
       return;
     }
     const value = values[provider].trim();
@@ -248,8 +214,8 @@ export default function KeysPage() {
   }
 
   async function deleteProviderKey(provider: ProviderId) {
-    if (!gatewayKey) {
-      setError('Generate your gateway key first');
+    if (!user) {
+      setError('Please log in to manage provider keys');
       return;
     }
     setError('');
@@ -271,23 +237,18 @@ export default function KeysPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10">
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-100">Your gateway key</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Signed in as <span className="text-slate-200">{user?.username ?? '…'}</span>
-          </p>
-        </div>
-        <button
-          onClick={() => {
-            localStorage.clear();
-            router.push('/login');
-          }}
-          className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
-        >
-          Sign out
-        </button>
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold text-slate-100">Your gateway key</h1>
+        <p className="mt-1 text-sm text-slate-400">
+          Signed in as <span className="text-slate-200">{user?.username ?? '…'}</span>
+        </p>
       </div>
+
+      {sessionError && (
+        <div className="mb-4 rounded-xl border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-400">
+          {sessionError}
+        </div>
+      )}
 
       {/* Gateway key banner/box */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg">
@@ -350,7 +311,7 @@ export default function KeysPage() {
           </p>
         </div>
 
-        {loadingKeys && gatewayKey ? (
+        {loadingKeys && !sessionError ? (
           <div className="flex items-center justify-center p-12 text-slate-400">
             <Loader2 className="animate-spin mr-2" size={20} />
             Loading provider keys…
@@ -438,7 +399,7 @@ export default function KeysPage() {
                               <button
                                 type="button"
                                 onClick={() => deleteProviderKey(provider.id)}
-                                disabled={isOperating || !gatewayKey}
+                                disabled={isOperating || !user}
                                 className="rounded-lg border border-slate-700 p-2 text-red-400 hover:bg-slate-800 disabled:opacity-50"
                                 aria-label="Delete"
                                 title="Remove key"
@@ -455,7 +416,7 @@ export default function KeysPage() {
                               <button
                                 type="button"
                                 onClick={() => submitProviderKey(provider.id)}
-                                disabled={isOperating || !currentValue.trim() || !gatewayKey}
+                                disabled={isOperating || !currentValue.trim() || !user}
                                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-slate-700 disabled:opacity-50"
                               >
                                 {isOperating && <Loader2 className="animate-spin" size={14} />}
