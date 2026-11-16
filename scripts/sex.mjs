@@ -21,6 +21,10 @@ import { spawn } from 'node:child_process';
 import process from 'node:process';
 import { readFileSync } from 'node:fs';
 import { get } from 'node:http';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const __dirname = pathToFileURL(process.argv[1]).pathname;
 
 const args = new Set(process.argv.slice(2));
 const useDocker = !args.has('--no-docker');
@@ -48,7 +52,7 @@ function run(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, {
       stdio: 'inherit',
-      shell: isWindows, // resolve .cmd shims (npm.cmd) on Windows
+      shell: isWindows,
       ...opts,
     });
     child.on('error', reject);
@@ -57,11 +61,12 @@ function run(cmd, args, opts = {}) {
 }
 
 /** Spawn a long-lived child and track it for shutdown. */
-function spawnTracked(label, cmd, args, env = {}) {
+function spawnTracked(label, cmd, args, env = {}, cwd = undefined) {
   const child = spawn(cmd, args, {
     stdio: 'inherit',
     shell: isWindows,
     env: { ...process.env, ...env },
+    cwd,
   });
   children.push({ label, child });
   child.on('exit', (code) => {
@@ -128,10 +133,7 @@ async function main() {
   spawnTracked('backend', 'npm', ['run', 'dev']);
 
   // Frontend: its own package.json, on port 3000
-  spawnTracked('frontend', 'npm', ['run', 'dev'], {
-    // Next reads NEXT_PUBLIC_* at build/dev time from frontend/.env.local,
-    // which already points at the backend.
-  });
+  spawnTracked('frontend', 'npm', ['run', 'dev'], {}, resolve(__dirname, '../frontend'));
 
   console.log('[sex] waiting for services to become ready...');
   await Promise.all([
