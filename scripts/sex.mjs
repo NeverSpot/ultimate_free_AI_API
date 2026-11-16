@@ -22,9 +22,8 @@ import process from 'node:process';
 import { readFileSync } from 'node:fs';
 import { get } from 'node:http';
 import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
 
-const __dirname = pathToFileURL(process.argv[1]).pathname;
+const __dirname = import.meta.dirname;
 
 const args = new Set(process.argv.slice(2));
 const useDocker = !args.has('--no-docker');
@@ -69,6 +68,7 @@ function spawnTracked(label, cmd, args, env = {}, cwd = undefined) {
     cwd,
   });
   children.push({ label, child });
+  child.on('error', (err) => console.error(`[sex] ${label} failed to start: ${err.message}`));
   child.on('exit', (code) => {
     if (!shuttingDown) {
       console.log(`\n[sex] ${label} exited with code ${code}`);
