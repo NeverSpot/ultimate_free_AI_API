@@ -3,11 +3,76 @@
 **Phase A surface.** Status of each section is marked; anything marked *later* is a
 documented gap, not an accident.
 
-Base path: `/`. Auth: `Authorization: Bearer <gateway-key>` (compared in constant time
-against `ADMIN_TOKEN` in Phase A; a `gateway_keys` table replaces it at Block 11).
+Base path: `/`. Auth has two layers:
+
+- **API routes** (`/v1/chat/completions`, `/v1/user/keys`, …) require
+  `Authorization: Bearer <gateway-key>` — a user `gk_…` key or the shared admin token
+  (constant-time compare).
+- **User session routes** (`/v1/user/*`) additionally accept the httpOnly `jwt` cookie set
+  by login/register. A JWT-only request to `/v1/chat/completions` is **401**: the cookie is
+  scoped to `/v1/user/*` so streaming stays off the CSRF surface.
 
 Body limit `2 MiB` (`MAX_BODY_BYTES`). Per-attempt timeout `10s`, total request deadline
 `30s` (`ATTEMPT_TIMEOUT_MS`, `REQUEST_DEADLINE_MS`).
+
+---
+
+## Auth & session — *Blocks 19–20 + JWT migration*
+
+### `POST /v1/auth/register`
+
+```json
+{ "username": "alice", "email": "alice@example.com", "password": "minimum-8-chars" }
+```
+
+`201` with `{ user: { id, username, email }, gateway_api_key: "gk_…" }`. The gateway key is
+returned **once** in plaintext; only its SHA-256 hash is stored. Also sets the session cookie.
+Duplicate username/email → `409`; missing fields or a non-object body → `400`.
+
+### `POST /v1/auth/login`
+
+```json
+{ "username": "alice", "password": "minimum-8-chars" }
+```
+
+`200` with `{ userId, username }` and a `Set-Cookie` session. Never returns the gateway key.
+Wrong credentials → `401`.
+
+### `POST /v1/auth/regenerate-key`
+
+Username + password verify directly (the `/v1/auth/*` routes are exempt from the session
+hook). Invalidates the old key immediately and returns
+`{ gateway_api_key: "gk_…" }` once. The old key then returns `401`.
+
+### `POST /v1/auth/logout`
+
+`200 { "ok": true }` and clears the cookie (`Max-Age=0`). Stateless JWT: logout does not
+revoke an already-stolen token; tokens expire after 7 days.
+
+### `GET /v1/user/me`
+
+Requires the session cookie (or a gateway key). `200 { id, username, email }`,
+`Cache-Control: no-store`. The frontend bootstraps its header and keys page from this.
+
+### Session cookie contract
+
+| Attribute | Value |
+|---|---|
+| Name | `jwt` |
+| Value | HS256 JWT: `{ userId, username, iat, exp }`, 7-day expiry |
+| `Path` | `/` |
+| `HttpOnly` | yes |
+| `SameSite` | `Strict` (documented same-site `localhost` deployment) |
+| `Secure` | only when `NODE_ENV=production` |
+| `JWT_SECRET` | optional in dev, **required ≥ 32 chars in production** |
+
+### Scope rule
+
+| Request | Result |
+|---|---|
+| JWT cookie → `/v1/user/keys`, `/v1/user/me` | `200` |
+| JWT cookie → `/v1/chat/completions` | `401` |
+| Gateway key / admin token → `/v1/user/keys` | gateway key `200`; admin `401` (no user context) |
 
 ---
 
