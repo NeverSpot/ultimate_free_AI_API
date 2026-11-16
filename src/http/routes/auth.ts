@@ -21,9 +21,22 @@ function requireNonEmpty(fields: Record<string, string | undefined>): void {
   }
 }
 
+/**
+ * A JSON body of `null` parses successfully but cannot be destructured.
+ * Reject it at the boundary so it becomes a 400, never a 500.
+ */
+function requireObjectBody(body: unknown): Record<string, unknown> {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    throw new ApiError('client', 'request body must be a JSON object');
+  }
+  return body as Record<string, unknown>;
+}
+
 export function registerAuthRoutes(app: FastifyInstance, deps: { userStore: UserModel }): void {
   app.post('/v1/auth/register', async (request, reply) => {
-    const { username, email, password } = request.body as unknown as RegisterRequestType;
+    const { username, email, password } = requireObjectBody(
+      request.body,
+    ) as unknown as RegisterRequestType;
     requireNonEmpty({ username, email, password });
     if (password.length < 8) {
       throw new ApiError('client', 'password must be at least 8 characters');
@@ -43,7 +56,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: { userStore: User
   });
 
   app.post('/v1/auth/login', async (request, reply) => {
-    const { username, password } = request.body as unknown as LoginRequestType;
+    const { username, password } = requireObjectBody(request.body) as unknown as LoginRequestType;
     requireNonEmpty({ username, password });
     const user = await deps.userStore.verifyPassword(username, password);
     if (user === null) {
@@ -53,7 +66,9 @@ export function registerAuthRoutes(app: FastifyInstance, deps: { userStore: User
   });
 
   app.post('/v1/auth/regenerate-key', async (request, reply) => {
-    const { username, password } = request.body as unknown as RegenerateKeyRequestType;
+    const { username, password } = requireObjectBody(
+      request.body,
+    ) as unknown as RegenerateKeyRequestType;
     requireNonEmpty({ username, password });
     const user = await deps.userStore.verifyPassword(username, password);
     if (user === null) {

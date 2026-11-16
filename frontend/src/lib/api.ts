@@ -47,10 +47,13 @@ function getGatewayKey(): string | null {
   }
 }
 
-function getHeaders(): HeadersInit {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
+function getHeaders(withBody = false): HeadersInit {
+  const headers: Record<string, string> = {};
+  // Fastify rejects a JSON content-type with an empty body (400), so only
+  // declare it when a body is actually sent.
+  if (withBody) {
+    headers['Content-Type'] = 'application/json';
+  }
   const key = getGatewayKey();
   if (key) {
     headers['Authorization'] = `Bearer ${key}`;
@@ -60,7 +63,10 @@ function getHeaders(): HeadersInit {
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    if (response.status === 401 && typeof window !== 'undefined') {
+    // A 401 from /v1/auth/* means "wrong credentials", not "expired session".
+    // Redirecting here would reload the login page and hide the error message.
+    const isAuthRequest = response.url.includes('/v1/auth/');
+    if (response.status === 401 && !isAuthRequest && typeof window !== 'undefined') {
       localStorage.removeItem('gateway_key');
       localStorage.removeItem('gateway_api_key');
       localStorage.removeItem('user');
@@ -105,7 +111,7 @@ export const api = {
   async post<T>(path: string, body?: unknown): Promise<T> {
     const response = await fetch(buildUrl(path), {
       method: 'POST',
-      headers: getHeaders(),
+      headers: getHeaders(body !== undefined),
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     return handleResponse<T>(response);
@@ -114,7 +120,7 @@ export const api = {
   async put<T>(path: string, body?: unknown): Promise<T> {
     const response = await fetch(buildUrl(path), {
       method: 'PUT',
-      headers: getHeaders(),
+      headers: getHeaders(body !== undefined),
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     return handleResponse<T>(response);
@@ -123,7 +129,7 @@ export const api = {
   async delete<T>(path: string, body?: unknown): Promise<T> {
     const response = await fetch(buildUrl(path), {
       method: 'DELETE',
-      headers: getHeaders(),
+      headers: getHeaders(body !== undefined),
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     return handleResponse<T>(response);

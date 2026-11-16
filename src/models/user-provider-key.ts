@@ -24,9 +24,11 @@ export interface NewUserProviderKey {
 
 export function createUserProviderKeyModel(db: DbExecutor, masterKey: string) {
   async function createUserProviderKey(key: NewUserProviderKey): Promise<UserProviderKey> {
+    // `label` is NOT NULL in the schema; the UI does not collect one, so the
+    // provider id is the default human-readable label for the key.
     const result = await db.query<UserProviderKey>(
-      `insert into user_provider_keys (user_id, provider, ciphertext, iv, auth_tag, fingerprint)
-       values ($1, $2, $3, $4, $5, $6)
+      `insert into user_provider_keys (user_id, provider, label, ciphertext, iv, auth_tag, fingerprint)
+       values ($1, $2, $2, $3, $4, $5, $6)
        returning id, user_id, provider, ciphertext, iv, auth_tag, fingerprint, created_at, updated_at`,
       [key.user_id, key.provider, key.ciphertext, key.iv, key.auth_tag, key.fingerprint],
     );

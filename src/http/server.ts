@@ -137,12 +137,23 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   registerHealthz(app, deps.probes);
   registerChatCompletions(app, deps);
 
-  registerAuthRoutes(app, { userStore: deps.userStore! });
-  registerUserKeyRoutes(app, {
-    providerKeyStore: deps.providerKeyStore!,
-    getUserId: (req) => req.user?.id ?? null,
-    encryptionKey: deps.config.encryptionKey,
-  });
+  // Auth is a core route. If production is built without a user store, fail at
+  // startup rather than letting every registration request 500 on an undefined store.
+  if (deps.userStore) {
+    registerAuthRoutes(app, { userStore: deps.userStore });
+  } else if (deps.config.nodeEnv === 'production') {
+    throw new Error('buildServer: userStore is required when NODE_ENV=production');
+  }
+
+  if (deps.providerKeyStore) {
+    registerUserKeyRoutes(app, {
+      providerKeyStore: deps.providerKeyStore,
+      getUserId: (req) => req.user?.id ?? null,
+      encryptionKey: deps.config.encryptionKey,
+    });
+  } else if (deps.config.nodeEnv === 'production') {
+    throw new Error('buildServer: providerKeyStore is required when NODE_ENV=production');
+  }
 
   registerSpendCapRoutes(app);
 

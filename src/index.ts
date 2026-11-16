@@ -1,5 +1,9 @@
 import { loadConfig } from './config/env';
+import { createDbClient } from './db/client';
+import { createGatewayKeyAuth } from './http/middleware/gateway-key-auth';
 import { buildServer } from './http/server';
+import { createUserModel } from './models/user';
+import { createUserProviderKeyModel } from './models/user-provider-key';
 import { MockProviderAdapter } from './providers/mock';
 import type { Credential } from './providers/types';
 
@@ -14,7 +18,27 @@ async function main(): Promise<void> {
     secret: 'mock-secret',
   };
 
-  const app = buildServer({ config, provider, credential, logger: true });
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL is required');
+  }
+  const db = createDbClient(databaseUrl);
+  const userStore = createUserModel(db);
+  const providerKeyStore = createUserProviderKeyModel(db, config.encryptionKey);
+  const gatewayKeyAuth = createGatewayKeyAuth({
+    adminToken: config.adminToken,
+    findUserByGatewayKey: (hash) => userStore.findByGatewayApiKeyHash(hash),
+  });
+
+  const app = buildServer({
+    config,
+    provider,
+    credential,
+    logger: true,
+    userStore,
+    providerKeyStore,
+    gatewayKeyAuth,
+  });
 
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info({ signal }, 'shutting down');

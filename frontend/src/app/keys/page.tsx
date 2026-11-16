@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, Copy, X, Edit2, Trash2, RefreshCw, Loader2 } from 'lucide-react';
 import { api, type KeySummary, type ListKeysResponse, type RegenerateKeyResponse } from '@/lib/api';
@@ -23,24 +23,72 @@ function getProviderName(id: ProviderId): string {
   return p ? p.name : id;
 }
 
+// localStorage-backed values are read through `useSyncExternalStore`: the
+// server snapshot is empty, so the first client render matches the server HTML,
+// and React re-renders with the stored session after hydration.
+const STORAGE_CHANGE_EVENT = 'gateway-storage-change';
+
+function subscribeToStorage(onChange: () => void): () => void {
+  window.addEventListener('storage', onChange);
+  window.addEventListener(STORAGE_CHANGE_EVENT, onChange);
+  return () => {
+    window.removeEventListener('storage', onChange);
+    window.removeEventListener(STORAGE_CHANGE_EVENT, onChange);
+  };
+}
+
+interface StoredSession {
+  gatewayKey: string | null;
+  user: { userId?: string; username: string } | null;
+}
+
+const SERVER_SNAPSHOT = '';
+const NO_SESSION: StoredSession = { gatewayKey: null, user: null };
+
+// One snapshot for the whole session so `hydrated` and the stored values flip
+// together; separate snapshots could briefly report "hydrated, logged out".
+function readSessionSnapshot(): string {
+  if (typeof window === 'undefined') return SERVER_SNAPSHOT;
+  const gatewayKey = localStorage.getItem('gateway_api_key') || localStorage.getItem('gateway_key');
+  const rawUser = localStorage.getItem('user');
+  let user: StoredSession['user'] = null;
+  if (rawUser) {
+    try {
+      user = JSON.parse(rawUser) as StoredSession['user'];
+    } catch {
+      user = null;
+    }
+  }
+  return JSON.stringify({ gatewayKey, user });
+}
+
+function getServerSnapshot(): string {
+  return SERVER_SNAPSHOT;
+}
+
+function storeGatewayKey(key: string): void {
+  localStorage.setItem('gateway_api_key', key);
+  localStorage.setItem('gateway_key', key);
+  window.dispatchEvent(new Event(STORAGE_CHANGE_EVENT));
+}
+
 export default function KeysPage() {
   const router = useRouter();
 
-  // Lazy state initializers to avoid setState directly inside useEffect
-  const [gatewayKey, setGatewayKey] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem('gateway_api_key') || localStorage.getItem('gateway_key');
-  });
-
-  const [user] = useState<{ userId?: string; username: string } | null>(() => {
-    if (typeof window === 'undefined') return null;
+  const sessionSnapshot = useSyncExternalStore(
+    subscribeToStorage,
+    readSessionSnapshot,
+    getServerSnapshot,
+  );
+  const hydrated = sessionSnapshot !== SERVER_SNAPSHOT;
+  const { gatewayKey, user } = useMemo<StoredSession>(() => {
+    if (!sessionSnapshot) return NO_SESSION;
     try {
-      const raw = localStorage.getItem('user');
-      return raw ? JSON.parse(raw) : null;
+      return JSON.parse(sessionSnapshot) as StoredSession;
     } catch {
-      return null;
+      return NO_SESSION;
     }
-  });
+  }, [sessionSnapshot]);
 
   const [fingerprints, setFingerprints] = useState<Record<ProviderId, string>>({
     openrouter: '',
@@ -78,11 +126,14 @@ export default function KeysPage() {
   const [regenError, setRegenError] = useState('');
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const key = localStorage.getItem('gateway_api_key') || localStorage.getItem('gateway_key');
+    if (!hydrated) return;
 
-    if (!key) {
-      router.push('/login');
+    if (!gatewayKey) {
+      // Only unauthenticated visitors go back to login. A logged-in user with
+      // no stored key can generate one from this page via "Get New".
+      if (!user) {
+        router.push('/login');
+      }
       return;
     }
 
@@ -105,21 +156,20 @@ export default function KeysPage() {
           }
         }
         setFingerprints(map);
+        setError('');
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Failed to load provider keys');
       })
       .finally(() => {
-        if (!cancelled) {
-          setLoadingKeys(false);
-        }
+        if (!cancelled) setLoadingKeys(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [hydrated, gatewayKey, user, router]);
 
   async function copyGatewayKey() {
     if (!gatewayKey) return;
@@ -153,10 +203,7 @@ export default function KeysPage() {
         password: regenPassword,
       });
 
-      const newKey = data.gateway_api_key;
-      localStorage.setItem('gateway_api_key', newKey);
-      localStorage.setItem('gateway_key', newKey);
-      setGatewayKey(newKey);
+      storeGatewayKey(data.gateway_api_key);
 
       setShowRegenModal(false);
       setRegenPassword('');
@@ -170,6 +217,10 @@ export default function KeysPage() {
   }
 
   async function submitProviderKey(provider: ProviderId) {
+    if (!gatewayKey) {
+      setError('Generate your gateway key first');
+      return;
+    }
     const value = values[provider].trim();
     if (!value) {
       setError('Enter a provider key first');
@@ -197,6 +248,10 @@ export default function KeysPage() {
   }
 
   async function deleteProviderKey(provider: ProviderId) {
+    if (!gatewayKey) {
+      setError('Generate your gateway key first');
+      return;
+    }
     setError('');
     setOperationLoading((s) => ({ ...s, [provider]: true }));
 
@@ -266,6 +321,13 @@ export default function KeysPage() {
         </div>
       </div>
 
+      {!gatewayKey && user && (
+        <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-950/40 px-4 py-3 text-sm text-amber-300">
+          This browser has no gateway API key stored. Click <strong>Get New</strong> and confirm
+          your password to generate one.
+        </div>
+      )}
+
       {/* Status messages */}
       {error && (
         <div className="mt-4 rounded-xl border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-400">
@@ -288,7 +350,7 @@ export default function KeysPage() {
           </p>
         </div>
 
-        {loadingKeys ? (
+        {loadingKeys && gatewayKey ? (
           <div className="flex items-center justify-center p-12 text-slate-400">
             <Loader2 className="animate-spin mr-2" size={20} />
             Loading provider keys…
@@ -376,7 +438,7 @@ export default function KeysPage() {
                               <button
                                 type="button"
                                 onClick={() => deleteProviderKey(provider.id)}
-                                disabled={isOperating}
+                                disabled={isOperating || !gatewayKey}
                                 className="rounded-lg border border-slate-700 p-2 text-red-400 hover:bg-slate-800 disabled:opacity-50"
                                 aria-label="Delete"
                                 title="Remove key"
@@ -393,7 +455,7 @@ export default function KeysPage() {
                               <button
                                 type="button"
                                 onClick={() => submitProviderKey(provider.id)}
-                                disabled={isOperating || !currentValue.trim()}
+                                disabled={isOperating || !currentValue.trim() || !gatewayKey}
                                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-slate-700 disabled:opacity-50"
                               >
                                 {isOperating && <Loader2 className="animate-spin" size={14} />}
