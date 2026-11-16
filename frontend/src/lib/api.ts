@@ -1,5 +1,14 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/v1';
 
+/**
+ * Every request sends the httpOnly session cookie. `no-store` keeps the
+ * `/v1/user/me` probe honest after logout.
+ */
+const REQUEST_INIT: Pick<RequestInit, 'credentials' | 'cache'> = {
+  credentials: 'include',
+  cache: 'no-store',
+};
+
 export interface KeySummary {
   provider: string;
   fingerprint: string;
@@ -64,9 +73,16 @@ function getHeaders(withBody = false): HeadersInit {
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     // A 401 from /v1/auth/* means "wrong credentials", not "expired session".
-    // Redirecting here would reload the login page and hide the error message.
+    // A 401 from /v1/user/me is the session probe itself: the caller (useSession)
+    // branches on it. Redirecting from either would reload the page and hide the error.
     const isAuthRequest = response.url.includes('/v1/auth/');
-    if (response.status === 401 && !isAuthRequest && typeof window !== 'undefined') {
+    const isSessionProbe = response.url.includes('/v1/user/me');
+    if (
+      response.status === 401 &&
+      !isAuthRequest &&
+      !isSessionProbe &&
+      typeof window !== 'undefined'
+    ) {
       localStorage.removeItem('gateway_key');
       localStorage.removeItem('gateway_api_key');
       localStorage.removeItem('user');
@@ -85,7 +101,9 @@ async function handleResponse<T>(response: Response): Promise<T> {
     } catch {
       // best effort
     }
-    throw new Error(message);
+    const err = new Error(message) as Error & { status?: number };
+    err.status = response.status;
+    throw err;
   }
   const text = await response.text();
   return text ? (JSON.parse(text) as T) : (undefined as T);
@@ -104,6 +122,7 @@ export const api = {
     const response = await fetch(buildUrl(path), {
       method: 'GET',
       headers: getHeaders(),
+      ...REQUEST_INIT,
     });
     return handleResponse<T>(response);
   },
@@ -112,6 +131,7 @@ export const api = {
     const response = await fetch(buildUrl(path), {
       method: 'POST',
       headers: getHeaders(body !== undefined),
+      ...REQUEST_INIT,
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     return handleResponse<T>(response);
@@ -121,6 +141,7 @@ export const api = {
     const response = await fetch(buildUrl(path), {
       method: 'PUT',
       headers: getHeaders(body !== undefined),
+      ...REQUEST_INIT,
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     return handleResponse<T>(response);
@@ -130,6 +151,7 @@ export const api = {
     const response = await fetch(buildUrl(path), {
       method: 'DELETE',
       headers: getHeaders(body !== undefined),
+      ...REQUEST_INIT,
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     return handleResponse<T>(response);
