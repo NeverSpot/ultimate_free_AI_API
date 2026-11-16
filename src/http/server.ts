@@ -1,4 +1,4 @@
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import type { Config } from '../config/env';
 import { DEFAULT_CORS_ORIGIN } from '../config/env';
 import { newRequestId } from '../core/ids';
@@ -34,7 +34,13 @@ export interface ServerDeps {
   userStore?: UserModel;
   providerKeyStore?: UserProviderKeyModel;
   gatewayKeyAuth?: ReturnType<typeof createGatewayKeyAuth>;
+  jwtCookieAuth?: JwtCookieAuth;
   orgStore?: OrganizationModel;
+}
+
+/** Structural type so server.ts does not import the JWT middleware implementation. */
+export interface JwtCookieAuth {
+  tryAuthenticate(req: FastifyRequest): Promise<{ userId: string; username: string } | null>;
 }
 
 declare module 'fastify' {
@@ -121,11 +127,24 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   cacheMiddleware(app);
 
   const gatewayKeyAuth = deps.gatewayKeyAuth;
-  if (gatewayKeyAuth) {
-    app.addHook('onRequest', async (request, _reply) => {
+  const jwtCookieAuth = deps.jwtCookieAuth;
+
+  if (gatewayKeyAuth || jwtCookieAuth) {
+    app.addHook('onRequest', async (request) => {
       const url = request.url;
       if (url === '/healthz' || url.startsWith('/v1/auth/')) return;
-      await gatewayKeyAuth.authenticate(request);
+
+      // The JWT cookie is accepted ONLY on /v1/user/*: chat stays on gateway keys,
+      // which keeps the streaming endpoint off the CSRF surface.
+      if (url.startsWith('/v1/user/') && jwtCookieAuth) {
+        const jwtUser = await jwtCookieAuth.tryAuthenticate(request);
+        if (jwtUser) {
+          request.user = { id: jwtUser.userId, username: jwtUser.username };
+          return;
+        }
+      }
+      if (gatewayKeyAuth && (await gatewayKeyAuth.tryAuthenticate(request))) return;
+      throw new ApiError('auth', 'missing or invalid credentials');
     });
   }
 

@@ -50,5 +50,28 @@ export function createGatewayKeyAuth({
     return { kind: 'admin' };
   }
 
-  return { authenticate };
+  /**
+   * Non-throwing variant for the composite hook: returns false instead of
+   * rejecting so the caller can fall through to JWT cookie auth.
+   */
+  async function tryAuthenticate(req: FastifyRequest): Promise<boolean> {
+    const header = req.headers.authorization;
+    const match = header === undefined ? null : /^Bearer\s+(.+)$/i.exec(header);
+    const token = match?.[1]?.trim();
+    if (!token) return false;
+
+    if (token.startsWith('gk_')) {
+      const user = await findUserByGatewayKey(sha256Hex(token));
+      if (!user) return false;
+      req.user = { id: user.id, username: user.username };
+      return true;
+    }
+
+    const a = Buffer.from(token, 'utf8');
+    const b = Buffer.from(adminToken, 'utf8');
+    if (a.length === b.length && timingSafeEqual(a, b)) return true;
+    return false;
+  }
+
+  return { authenticate, tryAuthenticate };
 }
