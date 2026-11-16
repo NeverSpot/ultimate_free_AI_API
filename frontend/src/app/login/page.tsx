@@ -22,8 +22,7 @@ export default function LoginPage() {
 function LoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tab: 'signin' | 'register' =
-    searchParams.get('tab') === 'register' ? 'register' : 'signin';
+  const tab: 'signin' | 'register' = searchParams.get('tab') === 'register' ? 'register' : 'signin';
   const setTab = (next: 'signin' | 'register') =>
     router.replace(next === 'register' ? '/login?tab=register' : '/login');
 
