@@ -17,6 +17,7 @@ const config: Config = {
   requestDeadlineMs: 30_000,
   logLevel: 'silent',
   nodeEnv: 'test',
+  jwtSecret: 'test-secret',
 };
 
 const provider = new MockProviderAdapter({ id: 'mock', model: 'mock-model' });
@@ -133,6 +134,12 @@ describe('POST /v1/auth/register', () => {
       assert.equal(body.user.username, 'alice');
       assert.equal(body.user.email, 'alice@example.com');
       assert.match(body.gateway_api_key, /^gk_[0-9a-f]{64}$/);
+
+      const cookie = res.headers['set-cookie'];
+      assert.equal(typeof cookie, 'string');
+      assert.match(String(cookie), /^jwt=/);
+      assert.match(String(cookie), /HttpOnly/);
+      assert.match(String(cookie), /SameSite=Strict/);
     } finally {
       await app.close();
     }
@@ -211,6 +218,7 @@ describe('POST /v1/auth/login and /v1/auth/regenerate-key', () => {
       assert.equal(ok.statusCode, 200, ok.body);
       assert.equal(ok.json().username, 'dave');
       assert.equal(ok.json().gateway_api_key, undefined);
+      assert.match(String(ok.headers['set-cookie']), /^jwt=.*HttpOnly/);
 
       const bad = await post(app, '/v1/auth/login', {
         username: 'dave',

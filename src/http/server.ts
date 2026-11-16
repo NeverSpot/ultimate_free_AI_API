@@ -159,7 +159,11 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // Auth is a core route. If production is built without a user store, fail at
   // startup rather than letting every registration request 500 on an undefined store.
   if (deps.userStore) {
-    registerAuthRoutes(app, { userStore: deps.userStore });
+    registerAuthRoutes(app, {
+      userStore: deps.userStore,
+      jwtSecret: deps.config.jwtSecret,
+      nodeEnv: deps.config.nodeEnv,
+    });
   } else if (deps.config.nodeEnv === 'production') {
     throw new Error('buildServer: userStore is required when NODE_ENV=production');
   }

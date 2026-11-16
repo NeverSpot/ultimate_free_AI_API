@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { ApiError } from '../errors';
 import type { UserModel } from '../../models/user';
+import { signJwt } from '../../lib/jwt';
+import { sessionCookie } from '../plugins/session-cookie';
 import type { RegisterRequestType, LoginRequestType, RegenerateKeyRequestType } from '../schemas';
 
 interface HttpError extends Error {
@@ -32,7 +34,10 @@ function requireObjectBody(body: unknown): Record<string, unknown> {
   return body as Record<string, unknown>;
 }
 
-export function registerAuthRoutes(app: FastifyInstance, deps: { userStore: UserModel }): void {
+export function registerAuthRoutes(
+  app: FastifyInstance,
+  deps: { userStore: UserModel; jwtSecret?: string; nodeEnv: string },
+): void {
   app.post('/v1/auth/register', async (request, reply) => {
     const { username, email, password } = requireObjectBody(
       request.body,
@@ -40,6 +45,9 @@ export function registerAuthRoutes(app: FastifyInstance, deps: { userStore: User
     requireNonEmpty({ username, email, password });
     if (password.length < 8) {
       throw new ApiError('client', 'password must be at least 8 characters');
+    }
+    if (!deps.jwtSecret) {
+      throw new ApiError('auth', 'jwt not configured');
     }
 
     const existing =
@@ -49,6 +57,11 @@ export function registerAuthRoutes(app: FastifyInstance, deps: { userStore: User
     }
 
     const result = await deps.userStore.createUser({ username, email, password });
+    const token = signJwt(
+      { userId: result.user.id, username: result.user.username },
+      deps.jwtSecret,
+    );
+    reply.header('Set-Cookie', sessionCookie.serialize(token, deps.nodeEnv));
     return reply.status(201).send({
       user: { id: result.user.id, username: result.user.username, email: result.user.email },
       gateway_api_key: result.gatewayApiKeyPlaintext,
@@ -62,6 +75,11 @@ export function registerAuthRoutes(app: FastifyInstance, deps: { userStore: User
     if (user === null) {
       throw new ApiError('auth', 'invalid username or password');
     }
+    if (!deps.jwtSecret) {
+      throw new ApiError('auth', 'jwt not configured');
+    }
+    const token = signJwt({ userId: user.id, username: user.username }, deps.jwtSecret);
+    reply.header('Set-Cookie', sessionCookie.serialize(token, deps.nodeEnv));
     return reply.send({ userId: user.id, username: user.username });
   });
 
