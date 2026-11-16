@@ -63,11 +63,6 @@
     },
     {
       "action": "shell",
-      "resource": "git commit *",
-      "effect": "deny"
-    },
-    {
-      "action": "shell",
       "resource": "git reset *",
       "effect": "deny"
     },
