@@ -2,319 +2,195 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Fix three frontend auth-UX defects — (1) login auto-returns a usable gateway key, (2) `/login` always opens on Sign In, and (3) the header shows one auth-aware toggle button instead of two static links.
+**Goal:** Finish the frontend auth UX — (1) `/login` always opens on Sign In with URL-driven tabs that survive client navigation; (2) one auth-aware header (Login vs Keys + Sign out) that updates without a reload; (3) migrate the keys page so a JWT-only session (no localStorage `user`/gateway key) works: it authenticates from `/v1/user/me`, loads provider keys, supports "Get New", and shares the header's sign-out.
 
-**Architecture:** The backend login route regenerates and returns a `gateway_api_key` (the stored key is a SHA-256 hash and cannot be re-displayed, so login rotates it). The frontend stores that key on login, reads auth state from `localStorage.user`, drives a single header `<AuthNav/>` client component, and derives the login tab from the URL reactively via `useSearchParams` (wrapped in `<Suspense>`).
+**Architecture:** The login tab is **derived from the URL** (`useSearchParams`) — no `useState`, no setState-in-effect; tab buttons `router.replace` the URL. The header `<AuthNav/>` and the keys page both consume one `useSession()` hook that fetches `GET /v1/user/me`, refetches on pathname change, and branches on `err.status === 401`. The keys page keeps `useSyncExternalStore` only for the **gateway-key display**, not for auth.
 
-**Tech Stack:** Next.js 16.4.6 (App Router, Turbopack), React 19, TypeScript, Fastify, Node `crypto`, Vitest (backend only)
+**Tech Stack:** Next.js 16.4.6 (App Router, Turbopack), React 19, TypeScript, Tailwind. No frontend test runner — gate is `npx tsc --noEmit` + `npm run lint` + `npm run build` + browser E2E.
 
-**Spec:** Companion to `docs/superpowers/plans/2026-11-16-jwt-authentication-migration.md`. This plan is independently shippable on the current localStorage-user auth model and remains compatible with JWT once that plan lands.
+**Spec:** This file. **Depends on the JWT plan** (`docs/superpowers/plans/2026-11-16-jwt-authentication-migration.md`): `/v1/user/me` (JWT T5), the session cookie (JWT T4), `/v1/auth/logout` (JWT T6), and `api.ts` credentials + status errors + `/me` exemption (JWT T7). JWT T7 already makes `api.ts` cookie-aware; this plan consumes it.
 
 ## Global Constraints
 
-- No test runner exists in `frontend/` — the automated gate for frontend tasks is `npm run build` (exit 0) + `npm run lint` (exit 0) run from `frontend/`. Behaviour is verified manually in the browser at `http://localhost:3000`.
-- The backend change (Task 1) uses the existing Vitest harness at repo root — `npm test -- <file>`.
-- `users.gateway_api_key_hash` stores `sha256Hex(plaintext)`; the plaintext is unrecoverable. Regenerating on login is the only way to hand the client a working key without a schema change.
-- British/Indian English in user-facing copy; preserve existing Tailwind class conventions (slate palette).
-- Do not touch `.env` values. Do not commit secrets.
+- **No frontend test runner.** Gate: `cd frontend && npx tsc --noEmit` + `npm run lint` + `npm run build`, plus browser steps at `:3000` (API `:8081`).
+- **Lint-clean:** `react-hooks/set-state-in-effect` is **error** in the installed eslint-config-next. Never call `setState` synchronously in an effect body. Set state only inside async `.then/.catch/.finally`, or derive from the URL / `useSyncExternalStore`.
+- **No `.env` edits.** API base URL already reads `process.env.NEXT_PUBLIC_API_URL`.
+- **Reuse the existing store pattern.** `keys/page.tsx` reads localStorage via `useSyncExternalStore` + a `gateway-storage-change` event — keep that for the gateway-key display only.
+- **Do not rotate the gateway key on login.** Manual "Get New" is retained.
 
 ## Review Focus
 
-- **Client-side nav from `/login?tab=register` to `/login`:** must land on Sign In, not retain the previous Create Account tab. (Task 2)
-- **Logged-in user visits `/login`:** must not be able to create a duplicate account by accident; header must show Keys/Sign out, not Login. (Task 3)
-- **Login on a second device/browser:** user has no stored key; after login the Keys page must show the key immediately without a manual "Get New". (Tasks 1 + 4)
-- **Old gateway key invalidation:** rotating the key on login invalidates any key the user pasted into their own apps; this is a known, documented tradeoff. (Task 1)
-- **`useSearchParams` without Suspense:** Next 16 throws a build error / CSR bailout if unguarded — the page must wrap the consumer in `<Suspense>`. (Task 2)
+- **Client nav from `/login?tab=register` to `/login`:** tab is derived from the URL, so bare `/login` always shows Sign In. (Task 1)
+- **Header updates after login/logout without reload:** `useSession` refetches `/me` on pathname change. (Task 2)
+- **`/me` 401 must not reload-loop:** `api.ts` (JWT T7) exempts `/user/me` from the 401 redirect; `useSession` clears `user` on `status === 401`. (Task 2)
+- **JWT-only session on `/keys`:** provider keys load whenever the session exists; "Get New" uses the session username; page-level sign-out removed in favour of the header's. (Task 3)
+- **Lint:** login tab has no state; `useSession` sets state only in async callbacks. (Tasks 1, 2)
 
 ---
 
 ## Pre-Execution Verification (do this BEFORE any task)
 
-> **Do not re-implement what already works.** A separate change has already fixed the *login-redirect symptom* (a logged-in user with no stored key now stays on `/keys` behind an amber "Get New" banner) and silenced the hydration error (`suppressHydrationWarning` on `<html>`). That is **not** the same as the four tasks below — verify each one first.
+> **Do not re-implement what already works.** The committed fix (commit `3b60303`) already added the amber "Get New" banner and `suppressHydrationWarning`. This plan covers what is still missing.
 
-**Step 0.1 — Baseline (read-only):**
+**Step 0.1 — Baseline (read-only):** `git status --short --branch`, `git log --oneline -8`. Do not `reset`/`clean` a dirty tree; ask the human first.
 
-```bash
-git status --short --branch
-git log --oneline -8
-```
+**Step 0.2 — Gates green:** `cd frontend && npx tsc --noEmit && npm run lint` → both exit 0. If red, STOP.
 
-Do not `reset` or `clean` a dirty tree. Ask the human which uncommitted changes are intentional before touching anything.
-
-**Step 0.2 — Backend must be green before you start:**
-
-```bash
-npm run verify
-```
-
-Expected: `fail 0`, exit 0. If it is already red, STOP — you would be fixing a broken baseline, not adding a feature. Report the failures first.
-
-**Step 0.3 — Per-task "already done?" probes.** Run each probe and READ the output; a match in the right place = skip that task.
+**Step 0.3 — Per-task probes** (`rg`):
 
 | Task | Already done if… | Probe |
 |------|------------------|-------|
-| 1 — login returns gateway key | the `/v1/auth/login` success reply includes `gateway_api_key` (register + regenerate already have one — ignore those) | `grep -n -A2 "v1/auth/login" src/http/routes/auth.ts` |
-| 2 — `/login` defaults to Sign In, no hydration | login page reads the tab from `useSearchParams` and has no `typeof window` initializer | `grep -n "useSearchParams\|typeof window\|useState" frontend/src/app/login/page.tsx` |
-| 3 — auth-aware header toggle | `frontend/src/components/auth-nav.tsx` exists AND layout renders `<AuthNav` | `ls frontend/src/components/auth-nav.tsx; grep -n AuthNav frontend/src/app/layout.tsx` |
-| 4 — persist key on login | the **sign-in** submit handler writes `gateway_api_key` to localStorage (the register handler already does via `setRegisteredKey` — do not count that) | `grep -n -B6 "setRegisteredKey" frontend/src/app/login/page.tsx` |
+| 1 — URL login tab | `useSearchParams` + `router.replace`; no `typeof window` / no `useState` for `tab` | `rg -n "useSearchParams\|router.replace\|typeof window\|useState.*tab" frontend/src/app/login/page.tsx` |
+| 2 — auth header + hook | `auth-nav.tsx` + `use-session.ts` exist; header uses `/user/me` | `ls frontend/src/components/auth-nav.tsx frontend/src/hooks/use-session.ts; rg -n "user/me\|AuthNav" frontend/src/app/layout.tsx` |
+| 3 — keys page migrated | keys page uses `useSession` (not `localStorage.user`) and no page-level sign-out | `rg -n "useSession\|localStorage.getItem\('user'\)\|Sign out" frontend/src/app/keys/page.tsx` |
 
-If a probe shows a task is already implemented, mark it `[x] SKIP — already implemented (verified <date>)` and leave its files untouched. Only implement tasks whose probe shows they are missing.
+Mark `[x] SKIP — already implemented (verified <date>)` when a probe passes in the right place.
 
-**Step 0.4 — Record the baseline** before executing: current commit, `npm run verify` counts, and the list of tasks you are skipping. This is how we avoid fixing what is already fixed.
+**Step 0.4 — Record the baseline.**
 
 ---
 
 ## File Structure
 
 ### New Files
-- `frontend/src/components/auth-nav.tsx` — client component: single auth-aware header button + sign-out.
-- `frontend/src/hooks/use-auth.ts` — client hook: reads `{ user }` from localStorage, exposes `user`, `isLoggedIn`, `signOut`.
+- `frontend/src/hooks/use-session.ts` — `useSession()` (single owner).
+- `frontend/src/components/auth-nav.tsx` — header.
 
 ### Modified Files
-- `src/http/routes/auth.ts` — login route regenerates + returns `gateway_api_key`.
-- `test/unit/auth-routes.test.ts` — assert login returns `gateway_api_key`.
-- `frontend/src/app/layout.tsx` — replace the two static nav links with `<AuthNav/>`.
-- `frontend/src/app/login/page.tsx` — fix hydration + default tab via `useSearchParams` in `<Suspense>`; store key on login.
-- `frontend/src/app/keys/page.tsx` — no structural change required; consumes the stored key (verify only).
+- `frontend/src/app/login/page.tsx` — URL-driven tab + `<Suspense>`.
+- `frontend/src/app/layout.tsx` — render `<AuthNav/>`.
+- `frontend/src/app/keys/page.tsx` — migrate auth to `useSession`; gateway key via store; unify sign-out.
 
 ---
 
-### Task 1: Backend — login returns an auto-generated gateway key
+### Task 1: `/login` — URL-driven tab, Sign In on bare `/login`
 
-**Files:**
-- Modify: `src/http/routes/auth.ts:58-66` (login handler)
-- Modify: `test/unit/auth-routes.test.ts`
+**Files:** modify `frontend/src/app/login/page.tsx`.
 
-**Interfaces:**
-- Consumes: `deps.userStore.verifyPassword(username, password)`, `deps.userStore.setGatewayApiKeyHash(userId): Promise<string>` (both already exist in `src/models/user.ts`).
-- Produces: `POST /v1/auth/login` response body `{ userId: string; username: string; gateway_api_key: string }`.
+- [ ] **Step 1: Replace the `typeof window` initializer with URL-derived state**
 
-- [ ] **Step 1: Write the failing test**
-
-Add to `test/unit/auth-routes.test.ts` (inside the existing `describe` that builds the app with a real/mock `userStore`):
-
-```typescript
-it('returns a gateway_api_key on successful login', async () => {
-  const response = await app.inject({
-    method: 'POST',
-    url: '/v1/auth/login',
-    payload: { username: 'testuser', password: 'password123' },
-  });
-
-  expect(response.statusCode).toBe(200);
-  const body = response.json();
-  expect(body).toHaveProperty('userId');
-  expect(body).toHaveProperty('username');
-  expect(typeof body.gateway_api_key).toBe('string');
-  expect(body.gateway_api_key.startsWith('gk_')).toBe(true);
-});
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `npm test -- test/unit/auth-routes.test.ts`
-Expected: FAIL — `body.gateway_api_key` is `undefined`.
-
-- [ ] **Step 3: Implement the login change**
-
-In `src/http/routes/auth.ts`, inside the `/v1/auth/login` handler, after the null check, generate a fresh key via the existing model method and include it in the reply:
-
-```typescript
-const user = await deps.userStore.verifyPassword(username, password);
-if (user === null) {
-  throw new ApiError('auth', 'invalid username or password');
-}
-const gatewayApiKey = await deps.userStore.setGatewayApiKeyHash(user.id);
-return reply.send({ userId: user.id, username: user.username, gateway_api_key: gatewayApiKey });
-```
-
-Note in the commit body: login now rotates the gateway key; the previous key is invalidated.
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `npm test -- test/unit/auth-routes.test.ts`
-Expected: PASS (all auth-route tests, including the new one).
-
-- [ ] **Step 5: Run the full backend suite for regressions**
-
-Run: `npm run verify`
-Expected: exit 0, `fail 0`.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/http/routes/auth.ts test/unit/auth-routes.test.ts
-git commit -m "feat(auth): return auto-generated gateway key on login"
-```
-
----
-
-### Task 2: Frontend — `/login` always opens on Sign In (and fix hydration)
-
-**Files:**
-- Modify: `frontend/src/app/login/page.tsx:1-30` (imports + `tab` state + component wrapper)
-
-**Interfaces:**
-- Consumes: Next.js `useSearchParams` from `next/navigation`.
-- Produces: `/login` renders Sign In first; `/login?tab=register` renders Create Account; navigating between them updates the visible tab. Server HTML and first client render both show Sign In (no hydration mismatch).
-
-- [ ] **Step 1: Replace the `typeof window` state initializer**
-
-Delete the current initializer:
-
-```typescript
-const [tab, setTab] = useState<'signin' | 'register'>(() => {
-  if (typeof window === 'undefined') return 'signin';
-  const params = new URLSearchParams(window.location.search);
-  return params.get('tab') === 'register' ? 'register' : 'signin';
-});
-```
-
-Replace with URL-derived state that re-syncs on navigation:
+Delete the `useState` initializer for `tab`; replace with:
 
 ```typescript
 const searchParams = useSearchParams();
-const urlTab: 'signin' | 'register' =
+const router = useRouter();
+const tab: 'signin' | 'register' =
   searchParams.get('tab') === 'register' ? 'register' : 'signin';
-const [tab, setTab] = useState<'signin' | 'register'>(urlTab);
-
-useEffect(() => {
-  setTab(urlTab);
-}, [urlTab]);
+const setTab = (next: 'signin' | 'register') =>
+  router.replace(next === 'register' ? '/login?tab=register' : '/login');
 ```
 
-Import `useSearchParams` from `next/navigation` and `useEffect` from `react`. The manual tab buttons keep calling `setTab(...)` — they change local state only, so the effect (keyed on `urlTab`) does not fight them.
+Keep the existing `setTab('signin'|'register')` call sites in the tab buttons — they now update the URL. Import `useSearchParams`, `useRouter` from `next/navigation`.
 
-- [ ] **Step 2: Wrap the `<Suspense>`-sensitive content**
+- [ ] **Step 2: Wrap in `<Suspense>` with a skeleton**
 
-Rename the current default-export page component to an inner component (e.g. `LoginPageInner`) and export a wrapper that provides the boundary `useSearchParams` requires in Next 16:
+Rename the component to `LoginPageInner`; export:
 
 ```typescript
 import { Suspense } from 'react';
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<div className="flex flex-1 items-center justify-center px-4 py-20"><div className="h-9 w-72 animate-pulse rounded-xl bg-slate-800/60" /></div>}>
       <LoginPageInner />
     </Suspense>
   );
 }
 ```
 
-- [ ] **Step 3: Verify build and lint**
+- [ ] **Step 3: Verify** — `cd frontend && npx tsc --noEmit && npm run lint && npm run build` → all exit 0.
+- [ ] **Step 4: Manual** — `/login` → Sign In; `/login?tab=register` → Create Account; header "Login" → `/login` shows Sign In; no hydration error.
 
-Run: `cd frontend && npm run build`
-Expected: exit 0, no `useSearchParams`/`Suspense` error.
-
-Run: `cd frontend && npm run lint`
-Expected: exit 0, no new errors.
-
-- [ ] **Step 4: Manual verification**
-
-With backend on `:8081` and frontend on `:3000`:
-1. Open `http://localhost:3000/login` → Sign In tab is active.
-2. Open `http://localhost:3000/login?tab=register` → Create Account tab is active.
-3. From Create Account, click the header "Login" link (goes to `/login`) → Sign In is shown (not the stale register tab).
-4. No hydration error in the browser console.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add frontend/src/app/login/page.tsx
-git commit -m "fix(frontend): default /login to sign-in and fix hydration mismatch"
-```
+After a successful sign-in, clear any stale `gateway_api_key`/`gateway_key` left by a previous user's session (so `/keys` never shows someone else's key while `/me` names a different user). Do **not** rotate the server key — just drop the stale localStorage copy before writing the new session.
+- [ ] **Step 5: Commit** — `git add frontend/src/app/login/page.tsx && git commit -m "fix(frontend): URL-driven login tab, default sign-in"`.
 
 ---
 
-### Task 3: Frontend — single auth-aware header button
+### Task 2: Auth-aware header + `useSession` hook
 
-**Files:**
-- Create: `frontend/src/hooks/use-auth.ts`
-- Create: `frontend/src/components/auth-nav.tsx`
-- Modify: `frontend/src/app/layout.tsx:40-47` (replace the two `<Link>`s)
+**Files:** create `frontend/src/hooks/use-session.ts`, `frontend/src/components/auth-nav.tsx`; modify `frontend/src/app/layout.tsx`.
 
-**Interfaces:**
-- Consumes: `localStorage.getItem('user')` (JSON `{ userId | id, username }`) — the same key every auth path writes.
-- Produces:
-  - `useAuth(): { user: { username: string } | null; isLoggedIn: boolean; signOut: () => void }`
-  - `<AuthNav />` — renders `Login` (logged out) or `Keys` + `Sign out` (logged in) in the same nav slot.
+**Interfaces:** `useSession(): { user: {id,username,email}|null, loading, error }`; `<AuthNav/>` renders Login / Keys+Sign out.
 
-- [ ] **Step 1: Create the `useAuth` hook**
+- [ ] **Step 1: `frontend/src/hooks/use-session.ts`** (no synchronous setState; status-based 401)
 
 ```typescript
-// frontend/src/hooks/use-auth.ts
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { api } from '@/lib/api';
 
-export interface AuthUser {
-  username: string;
-}
+export interface SessionUser { id: string; username: string; email: string }
 
-export function useAuth() {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [hydrated, setHydrated] = useState(false);
+export function useSession() {
+  const pathname = usePathname();
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('user');
-      setUser(raw ? (JSON.parse(raw) as AuthUser) : null);
-    } catch {
-      setUser(null);
-    }
-    setHydrated(true);
-  }, []);
+    let alive = true;
+    // No synchronous setState here — only inside async callbacks (react-hooks/set-state-in-effect).
+    api
+      .get<SessionUser>('/user/me')
+      .then((u) => { if (alive) { setUser(u); setError(null); } })
+      .catch((e: unknown) => {
+        if (!alive) return;
+        const status = (e as { status?: number })?.status;
+        if (status === 401) { setUser(null); setError(null); }
+        else setError(e instanceof Error ? e.message : 'Could not reach the server');
+      })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [pathname]);
 
-  const signOut = useCallback(() => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('gateway_api_key');
-    localStorage.removeItem('gateway_key');
-    setUser(null);
-  }, []);
-
-  return { user, isLoggedIn: user !== null, hydrated, signOut };
+  return { user, loading, error };
 }
 ```
 
-- [ ] **Step 2: Create the `AuthNav` component**
+- [ ] **Step 2: `frontend/src/components/auth-nav.tsx`** (sign-out awaits logout; redirects only on success)
 
 ```typescript
-// frontend/src/components/auth-nav.tsx
 'use client';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '../hooks/use-auth';
+import { api } from '@/lib/api';
+import { useSession } from '../hooks/use-session';
 
 export function AuthNav() {
-  const { isLoggedIn, hydrated, signOut } = useAuth();
+  const { user, loading } = useSession();
   const router = useRouter();
 
-  // Avoid a hydration flash: render nothing auth-specific until mounted.
-  if (!hydrated) {
-    return <nav className="flex items-center gap-4 text-sm text-slate-300" />;
-  }
+  if (loading) return <nav className="flex items-center gap-4 text-sm text-slate-300" />;
 
-  if (!isLoggedIn) {
+  if (!user) {
     return (
       <nav className="flex items-center gap-4 text-sm text-slate-300">
-        <Link href="/login" className="hover:text-slate-100">
-          Login
-        </Link>
+        <Link href="/login" className="hover:text-slate-100">Login</Link>
       </nav>
     );
   }
 
   return (
     <nav className="flex items-center gap-4 text-sm text-slate-300">
-      <Link href="/keys" className="hover:text-slate-100">
-        Keys
-      </Link>
+      <Link href="/keys" className="hover:text-slate-100">Keys</Link>
       <button
         type="button"
-        onClick={() => {
-          signOut();
+        onClick={async () => {
+          try {
+            await api.post('/auth/logout'); // must succeed before we clear/redirect
+          } catch {
+            return; // keep the session; surface via a toast/error if desired
+          }
+          try {
+            localStorage.removeItem('gateway_api_key');
+            localStorage.removeItem('gateway_key');
+            localStorage.removeItem('user');
+          } catch { /* ignore */ }
           router.push('/login');
+          router.refresh();
         }}
         className="hover:text-slate-100"
       >
@@ -325,110 +201,92 @@ export function AuthNav() {
 }
 ```
 
-- [ ] **Step 3: Replace the static nav in the layout**
-
-In `frontend/src/app/layout.tsx`, import `AuthNav` and replace the existing `<nav>…Login…Keys…</nav>` block (lines 40-47) with:
-
-```typescript
-<AuthNav />
-```
-
-- [ ] **Step 4: Verify build and lint**
-
-Run: `cd frontend && npm run build`
-Expected: exit 0.
-
-Run: `cd frontend && npm run lint`
-Expected: exit 0.
-
-- [ ] **Step 5: Manual verification**
-
-1. Logged out, open `/` → header shows **Login** only.
-2. Log in → header shows **Keys** + **Sign out** (no Login link).
-3. Click **Sign out** → returns to `/login`, header shows **Login** again.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add frontend/src/hooks/use-auth.ts frontend/src/components/auth-nav.tsx frontend/src/app/layout.tsx
-git commit -m "feat(frontend): auth-aware header toggle (Login vs Keys/Sign out)"
-```
+- [ ] **Step 3: `layout.tsx`** — import `AuthNav`; replace the two static `<nav>` `<Link>`s with `<AuthNav />`.
+- [ ] **Step 4: Verify** — `cd frontend && npx tsc --noEmit && npm run lint && npm run build` → all exit 0.
+- [ ] **Step 5: Manual** — logged out → header Login; login → header Keys + Sign out; Sign out → cookie cleared, header Login.
+- [ ] **Step 6: Commit** — `git add frontend/src/hooks/use-session.ts frontend/src/components/auth-nav.tsx frontend/src/app/layout.tsx && git commit -m "feat(frontend): auth-aware header on /user/me"`.
 
 ---
 
-### Task 4: Frontend — persist the auto-generated key on login
+### Task 3: Migrate the keys page to `useSession`
 
-**Files:**
-- Modify: `frontend/src/app/login/page.tsx` (the `onSignInSubmit` handler)
+**Files:** modify `frontend/src/app/keys/page.tsx`.
 
-**Interfaces:**
-- Consumes: `POST /v1/auth/login` returning `{ userId, username, gateway_api_key }` (Task 1).
-- Produces: after login, `localStorage.user`, `localStorage.gateway_api_key` are set, so `/keys` shows the key immediately.
+**Goal:** a JWT-only session (no localStorage `user`, no `gateway_api_key`) must: stay on `/keys`, load provider keys, allow "Get New" (using the session username), and use the header's sign-out (remove the page-level one).
 
-- [ ] **Step 1: Update the sign-in submit handler to store the key**
+- [ ] **Step 1: Replace localStorage `user` with `useSession`**
 
-In the sign-in submit handler, after a successful `api.post<LoginResponse>('/auth/login', …)`, persist both the user and the returned key:
+Add `import { useSession } from '@/hooks/use-session';`. Replace the localStorage-derived `user` (currently from `readSessionSnapshot`) with `const { user, loading: sessionLoading } = useSession();`. Keep `useSyncExternalStore` **only** for `gatewayKey` (the key display), not for auth.
+
+- [ ] **Step 2: Fix the redirect gate**
+
+Replace the current `useEffect` gate (`if (!gatewayKey) { if (!user) router.push('/login'); return; }`) with: redirect to `/login` only when the session has resolved and there is no user:
 
 ```typescript
-const data = await api.post<LoginResponse>('/auth/login', {
-  username: signInUsername.trim(),
-  password: signInPassword,
-});
+useEffect(() => {
+  if (sessionLoading || sessionError) return;   // still checking /me, or /me errored
+  if (!user) { router.push('/login'); return; }
+}, [sessionLoading, sessionError, user, router]);
+```
+Render `sessionError` instead of redirecting on a 5xx.
 
-localStorage.setItem('user', JSON.stringify({ userId: data.userId, username: data.username }));
-if (data.gateway_api_key) {
-  localStorage.setItem('gateway_api_key', data.gateway_api_key);
-}
+- [ ] **Step 3: Load provider keys whenever the session exists**
 
-router.push('/keys');
+Change the provider-key fetch to depend on `user` (session), not on `gatewayKey`. `GET /v1/user/keys` is JWT-authorized (JWT T5/T7), so a JWT-only session loads keys.
+
+- [ ] **Step 4: "Get New" uses the session username**
+
+Replace `user?.username` from localStorage with the session username. `user` is `SessionUser | null`, so destructure safely:
+
+```typescript
+const username = user?.username;   // user may be null here — guard already in place
 ```
 
-Add `gateway_api_key?: string` to the `LoginResponse` interface in `frontend/src/lib/api.ts` if it is not already present.
+Remove the "Username not found" path when a session user exists.
 
-- [ ] **Step 2: Verify build and lint**
+- [ ] **Step 5: Remove the page-level sign-out; unify with the header**
 
-Run: `cd frontend && npm run build`
-Expected: exit 0.
+Delete the page's own "Sign out" button/handler (lines that only call `localStorage.clear()`). Sign-out is the header's `AuthNav` (which calls `/auth/logout`). If a page-level control is still wanted, make it call the same `/auth/logout` flow, not `localStorage.clear()`.
 
-Run: `cd frontend && npm run lint`
-Expected: exit 0.
+- [ ] **Step 6: Enable provider-key actions for any session**
 
-- [ ] **Step 3: Manual end-to-end verification**
+Change the disabled conditions on provider-key actions (currently gated on `!gatewayKey`) to gate on `!user` (session) instead — a JWT-only session can add/delete provider keys. Also change `loadingKeys && gatewayKey` to `loadingKeys` alone so the loading state is not hidden for JWT-only sessions. Do **not** add a synchronous `setLoadingKeys(true)` at the top of the fetch effect — that's the same `react-hooks/set-state-in-effect` error; keep the existing `.finally` pattern.
 
-1. Register a new user → lands on `/keys`, key visible.
-2. Sign out, then sign in with the same credentials.
-3. `/keys` shows the provider-key table (empty is fine) and the **gateway key is auto-populated** — no "Get New" prompt, no password re-entry.
+- [ ] **Step 7: Verify** — `cd frontend && npx tsc --noEmit && npm run lint && npm run build` → all exit 0.
+- [ ] **Step 8: Manual (JWT-only session)** — log in, clear `localStorage` (`user`/`gateway_key`), refresh `/keys` → page stays, provider keys load, "Get New" works (no "Username not found"), header shows Keys + Sign out.
+- [ ] **Step 9: Commit** — `git add frontend/src/app/keys/page.tsx && git commit -m "feat(frontend): migrate keys page to /user/me session (JWT-only support)"`.
 
-- [ ] **Step 4: Commit**
+---
 
-```bash
-git add frontend/src/app/login/page.tsx frontend/src/lib/api.ts
-git commit -m "feat(frontend): persist auto-generated gateway key on login"
-```
+### Task 4: Full verification + browser E2E
+
+**Files:** all of the above.
+
+- [ ] **Step 1: Gates** — `cd frontend && npx tsc --noEmit && npm run lint && npm run build` → all exit 0. Backend `npm run verify` → `fail 0`.
+- [ ] **Step 2: Browser E2E** (`:3000`, API `:8081`):
+  1. Logged out → header Login; `/login` Sign In.
+  2. Register → cookie, `/keys`, header Keys + Sign out.
+  3. Refresh → still logged in (cookie), provider keys load.
+  4. Clear `localStorage` → still logged in (JWT); "Get New" works.
+  5. Sign out → cookie cleared, header Login, `/login` reachable.
+  6. `/login?tab=register` → Create Account; header Login → `/login` shows Sign In.
+- [ ] **Step 3: Commit** (only if fixups remain) — stage **explicit paths** after `git status --short` (never `git add -A`).
 
 ---
 
 ## Self-Review
 
-**1. Spec coverage:**
-- "Only logged-in user sees Keys / only logged-out sees Login, same place" → Task 3 (`AuthNav` in the same nav slot). ✓
-- "First gateway key generated automatically" → Task 1 (backend) + Task 4 (frontend stores it). ✓
-- "Opening `/login` shows Sign In first, switch manually" → Task 2 (`useSearchParams`-derived tab + Suspense). ✓
+**1. Spec coverage:** login-defaults-to-signin + URL tabs (T1), single header toggle (T2), keys-page JWT migration (T3), consolidated sign-out (T2/T3), status-based 401 (T2), no sync setState (T1/T2), single hook owner (T2; JWT plan no longer creates it). ✓
 
-**2. Step scan:** Each step is one action with a checkable result (write test / run test / implement / verify / commit, or build+lint+manual). No "handle edge cases" placeholders. The frontend has no unit harness, so behaviour steps use explicit browser actions with expected results rather than fabricated test commands.
+**2. Step scan:** one action per step; frontend uses build/lint/tsc + browser steps (no unit runner). ✓
 
-**3. Type consistency:** `useAuth()` returns `{ user, isLoggedIn, hydrated, signOut }` — `AuthNav` consumes exactly those. Login response type gains optional `gateway_api_key`, consumed in Task 4. `setGatewayApiKeyHash(userId): Promise<string>` matches the existing model signature.
+**3. Type consistency:** `useSession()` shape consumed by `AuthNav` (T2) and keys page (T3); `api` errors carry `status` (from JWT T7). ✓
 
-**4. Review Focus coverage:**
-- Stale register tab on nav → Task 2 Step 4 (manual check 3). ✓
-- Logged-in user on `/login` / duplicate account → Task 3 (header hides Login when logged in). ✓
-- Second-device login shows key immediately → Tasks 1 + 4 Step 3. ✓
-- Key rotation invalidation → Task 1 (documented tradeoff in commit + here). ✓
-- `useSearchParams` needs Suspense → Task 2 Step 2. ✓
+**4. Review Focus:** stale-tab (T1), header-updates (T2), `/me` no-loop (JWT T7 + T2), JWT-only keys page (T3), lint (T1/T2). ✓
 
-**5. Proportion:** Plan is comparable in length to the work; code blocks are signatures and small components the implementer cannot guess (hook, nav, state-sync), not full transcripts of unchanged files.
+**5. Proportion:** proportional; code blocks are the hook/component/page-diffs the implementer cannot guess. ✓
 
 ## Open Questions
 
-1. **Key rotation on every login** is a deliberate tradeoff of Task 1 (the stored key is hashed and unrecoverable). If rotating on each login is unacceptable (users paste the key into their own apps), the alternative is a "remember this device" flag or storing the key reversibly encrypted — both out of scope here. Confirm the rotation behaviour is acceptable before executing Task 1.
-2. Task 4 assumes the login page's existing variable names (`signInUsername`, `signInPassword`, `LoginResponse`). The implementer should reconcile with the actual file; names above match the current handler shape.
+1. **Landing order:** JWT plan first (needs `/user/me`, cookie, logout, `api.ts` status errors), then this plan.
+2. **Sign-out failure UX:** on `/auth/logout` failure the header keeps the session (no redirect) — a toast/error surface is a follow-up.
