@@ -281,4 +281,18 @@ describe('POST /v1/auth/login and /v1/auth/regenerate-key', () => {
       await app.close();
     }
   });
+
+  test('logout clears the session cookie', async () => {
+    const app = makeApp(createFakeUserStore());
+    try {
+      const res = await post(app, '/v1/auth/logout', {});
+      assert.equal(res.statusCode, 200, res.body);
+      const cookie = String(res.headers['set-cookie']);
+      assert.match(cookie, /^jwt=;/);
+      assert.match(cookie, /Max-Age=0/);
+      assert.match(cookie, /HttpOnly/);
+    } finally {
+      await app.close();
+    }
+  });
 });

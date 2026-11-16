@@ -95,4 +95,9 @@ export function registerAuthRoutes(
     const gatewayApiKey = await deps.userStore.setGatewayApiKeyHash(user.id);
     return reply.send({ gateway_api_key: gatewayApiKey });
   });
+
+  app.post('/v1/auth/logout', async (_request, reply) => {
+    reply.header('Set-Cookie', sessionCookie.clear(deps.nodeEnv));
+    return reply.send({ ok: true });
+  });
 }
