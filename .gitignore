@@ -55,3 +55,19 @@ load/dist/
 CODEBUDDY.md
 GEMINI.md
 QODER.md
+
+# development-process artifacts: kept on disk for local agent tooling,
+# deliberately not part of the repository
+.opencode-lock
+AGENTS.md
+CLAUDE.md
+PROJECT.md
+STATUS.md
+opencode.json
+.hermes/
+.github/copilot-instructions.md
+.github/instructions/
+docs/block-*.md
+docs/phase-*.md
+docs/superpowers/
+docs/worker-brief.md
