@@ -2,12 +2,18 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Type } from '@sinclair/typebox';
 import type { Static } from '@sinclair/typebox';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
-import { encryptAes256Gcm, sha256Hex } from '../../lib/crypto';
+import { encryptAes256Gcm } from '../../lib/crypto';
 import { ApiError } from '../errors';
-import type { UserProviderKey, UserProviderKeyModel } from '../../models/user-provider-key';
+import {
+  providerKeyFingerprint,
+  type UserProviderKey,
+  type UserProviderKeyModel,
+} from '../../models/user-provider-key';
 
 const KeySummary = Type.Object({
+  id: Type.String(),
   provider: Type.String(),
+  label: Type.String(),
   fingerprint: Type.String(),
   created_at: Type.String(),
   updated_at: Type.String(),
@@ -22,6 +28,7 @@ const ListResponse = Type.Object({
 const SubmitBody = Type.Object({
   provider: Type.String(),
   providerKey: Type.String(),
+  label: Type.Optional(Type.String()),
 });
 
 const Params = Type.Object({
@@ -42,7 +49,9 @@ function requireNonEmpty(fields: Record<string, string | undefined>): void {
 
 function toKeySummary(key: UserProviderKey): KeySummaryType {
   return {
+    id: key.id,
     provider: key.provider,
+    label: key.label,
     fingerprint: key.fingerprint,
     created_at: key.created_at.toISOString(),
     updated_at: key.updated_at.toISOString(),
@@ -90,32 +99,30 @@ export function registerUserKeyRoutes(
       requireNonEmpty({ provider: request.body.provider, providerKey: request.body.providerKey });
       const { provider, providerKey } = request.body;
       const { ciphertext, iv, authTag } = encryptAes256Gcm(providerKey, encryptionKey);
-      const fingerprint = sha256Hex(`${userId}:${provider}`);
 
-      const existing = await store.findByUserIdAndProvider(userId, provider);
-      let key: UserProviderKey;
+      // Derived from the key itself, not from (user, provider): that is what lets
+      // one user hold several keys for one provider.
+      const fingerprint = providerKeyFingerprint(userId, provider, providerKey);
+
+      // A repeat submission is a conflict, not a silent replace. The previous
+      // upsert destroyed whatever key was already sitting on that row.
+      const existing = await store.findByFingerprint(fingerprint);
       if (existing !== null) {
-        await store.updateKey(existing.id, userId, {
-          ciphertext,
-          iv,
-          auth_tag: authTag,
-          fingerprint,
-        });
-        const refreshed = await store.findByUserIdAndProvider(userId, provider);
-        if (refreshed === null) {
-          throw new Error('registerUserKeyRoutes: upsert row disappeared');
-        }
-        key = refreshed;
-      } else {
-        key = await store.createUserProviderKey({
-          user_id: userId,
-          provider,
-          ciphertext,
-          iv,
-          auth_tag: authTag,
-          fingerprint,
-        });
+        throw new ApiError('conflict', 'this key is already registered');
       }
+
+      const forProvider = await store.listKeysByProvider(userId, provider);
+      const label = request.body.label ?? `${provider}-${forProvider.length + 1}`;
+
+      const key = await store.createUserProviderKey({
+        user_id: userId,
+        provider,
+        label,
+        ciphertext,
+        iv,
+        auth_tag: authTag,
+        fingerprint,
+      });
 
       return reply.status(200).send(toKeySummary(key));
     },

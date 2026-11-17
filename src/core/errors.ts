@@ -6,6 +6,7 @@
  */
 export type ErrorKind =
   | 'client'
+  | 'conflict'
   | 'auth'
   | 'model_gone'
   | 'rate_limited'

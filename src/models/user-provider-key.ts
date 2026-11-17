@@ -16,6 +16,7 @@ export interface UserProviderKey {
   id: string;
   user_id: string;
   provider: string;
+  label: string;
   ciphertext: Buffer;
   iv: Buffer;
   auth_tag: Buffer;
@@ -27,6 +28,8 @@ export interface UserProviderKey {
 export interface NewUserProviderKey {
   user_id: string;
   provider: string;
+  /** Human-readable name. Defaults to the provider id when omitted. */
+  label?: string;
   ciphertext: Buffer;
   iv: Buffer;
   auth_tag: Buffer;
@@ -35,13 +38,22 @@ export interface NewUserProviderKey {
 
 export function createUserProviderKeyModel(db: DbExecutor, masterKey: string) {
   async function createUserProviderKey(key: NewUserProviderKey): Promise<UserProviderKey> {
-    // `label` is NOT NULL in the schema; the UI does not collect one, so the
-    // provider id is the default human-readable label for the key.
+    // `label` is NOT NULL in the schema. Callers may name a key — a user holding
+    // several for one provider needs to tell them apart — and the provider id
+    // stays the default so unnamed keys read exactly as they did before.
     const result = await db.query<UserProviderKey>(
       `insert into user_provider_keys (user_id, provider, label, ciphertext, iv, auth_tag, fingerprint)
-       values ($1, $2, $2, $3, $4, $5, $6)
-       returning id, user_id, provider, ciphertext, iv, auth_tag, fingerprint, created_at, updated_at`,
-      [key.user_id, key.provider, key.ciphertext, key.iv, key.auth_tag, key.fingerprint],
+       values ($1, $2, $3, $4, $5, $6, $7)
+       returning id, user_id, provider, label, ciphertext, iv, auth_tag, fingerprint, created_at, updated_at`,
+      [
+        key.user_id,
+        key.provider,
+        key.label ?? key.provider,
+        key.ciphertext,
+        key.iv,
+        key.auth_tag,
+        key.fingerprint,
+      ],
     );
 
     const row = result.rows[0];
@@ -56,7 +68,7 @@ export function createUserProviderKeyModel(db: DbExecutor, masterKey: string) {
     provider: string,
   ): Promise<UserProviderKey | null> {
     const result = await db.query<UserProviderKey>(
-      `select id, user_id, provider, ciphertext, iv, auth_tag, fingerprint, created_at, updated_at
+      `select id, user_id, provider, label, ciphertext, iv, auth_tag, fingerprint, created_at, updated_at
        from user_provider_keys
        where user_id = $1 and provider = $2`,
       [userId, provider],
@@ -66,7 +78,7 @@ export function createUserProviderKeyModel(db: DbExecutor, masterKey: string) {
 
   async function findByFingerprint(fingerprint: string): Promise<UserProviderKey | null> {
     const result = await db.query<UserProviderKey>(
-      `select id, user_id, provider, ciphertext, iv, auth_tag, fingerprint, created_at, updated_at
+      `select id, user_id, provider, label, ciphertext, iv, auth_tag, fingerprint, created_at, updated_at
        from user_provider_keys
        where fingerprint = $1`,
       [fingerprint],
@@ -122,7 +134,7 @@ export function createUserProviderKeyModel(db: DbExecutor, masterKey: string) {
 
   async function listKeys(userId: string): Promise<UserProviderKey[]> {
     const result = await db.query<UserProviderKey>(
-      `select id, user_id, provider, ciphertext, iv, auth_tag, fingerprint, created_at, updated_at
+      `select id, user_id, provider, label, ciphertext, iv, auth_tag, fingerprint, created_at, updated_at
        from user_provider_keys
        where user_id = $1
        order by created_at`,
@@ -133,7 +145,7 @@ export function createUserProviderKeyModel(db: DbExecutor, masterKey: string) {
 
   async function listKeysByProvider(userId: string, provider: string): Promise<UserProviderKey[]> {
     const result = await db.query<UserProviderKey>(
-      `select id, user_id, provider, ciphertext, iv, auth_tag, fingerprint, created_at, updated_at
+      `select id, user_id, provider, label, ciphertext, iv, auth_tag, fingerprint, created_at, updated_at
        from user_provider_keys
        where user_id = $1 and provider = $2
        order by created_at`,

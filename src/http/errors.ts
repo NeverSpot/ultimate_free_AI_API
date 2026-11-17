@@ -50,6 +50,8 @@ export function statusFor(kind: ErrorKind): number {
   switch (kind) {
     case 'client':
       return 400;
+    case 'conflict':
+      return 409;
     case 'auth':
       return 401;
     case 'model_gone':
@@ -74,6 +76,7 @@ export function statusFor(kind: ErrorKind): number {
 export function typeFor(kind: ErrorKind): string {
   switch (kind) {
     case 'client':
+    case 'conflict':
     case 'model_gone':
     case 'too_long':
     case 'blocked':
@@ -95,6 +98,8 @@ export function codeFor(kind: ErrorKind): string {
   switch (kind) {
     case 'client':
       return 'invalid_request';
+    case 'conflict':
+      return 'key_already_registered';
     case 'auth':
       return 'invalid_api_key';
     case 'model_gone':
