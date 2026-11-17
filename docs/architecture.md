@@ -142,8 +142,15 @@ Each adapter implements the `ProviderAdapter` interface:
 - `stream(req, credential)` — SSE async iterator
 - `listModels(credential)` — model discovery
 
+```
+src/providers/types.ts       # the ProviderAdapter interface
+src/providers/defaults.ts    # the single composition root
+src/providers/<name>.ts      # your adapter
+```
+
 Adding a provider = one new adapter file + one line in `src/providers/defaults.ts`.
-Nothing else changes.
+Nothing else changes: every CLI reads the same composition root, so a new provider reaches
+all of them without touching a script.
 
 ### Eval Harness (`src/eval/`)
 
