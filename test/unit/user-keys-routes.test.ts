@@ -346,3 +346,75 @@ test('GET /v1/user/keys returns 200 when no parking instance is wired', async (t
   assert.equal(body.keys[0]?.parked, false);
   assert.equal(body.keys[0]?.retry_after_ms, 0);
 });
+
+test('GET /v1/user/keys reads health from the parking instance the server was given', async (t) => {
+  const { store } = makeMemoryStore();
+  const parkedIds = new Set(['key-1']);
+  const app = buildServer({
+    config,
+    provider,
+    credential,
+    logger: false,
+    userStore: fakeUserStore(),
+    providerKeyStore: store,
+    // The composition path, not a bespoke isParked callback: production must get
+    // its reader from the same parking the router uses, or the display is inert.
+    parking: {
+      park: async () => {},
+      unpark: async () => {},
+      applyDecision: async () => {},
+      isParked: async (credentialId: string) => ({
+        parked: parkedIds.has(credentialId),
+        retryAfterMs: parkedIds.has(credentialId) ? 900_000 : 0,
+      }),
+    },
+    jwtCookieAuth: {
+      tryAuthenticate: async (req: { headers: { cookie?: string } }) =>
+        req.headers.cookie === 'jwt=valid' ? { userId: 'u1', username: 'alice' } : null,
+    },
+  });
+  t.after(async () => {
+    await app.close();
+  });
+
+  await app.inject({
+    method: 'POST',
+    url: '/v1/user/keys',
+    headers: SESSION,
+    payload: { provider: 'openrouter', providerKey: 'sk-or-a' },
+  });
+
+  const listed = await app.inject({ method: 'GET', url: '/v1/user/keys', headers: SESSION });
+  assert.equal(listed.statusCode, 200);
+  const body = listed.json() as { keys: { id: string; parked: boolean; retry_after_ms: number }[] };
+  assert.equal(body.keys[0]?.parked, true, 'the wired parking instance must reach the keys list');
+  assert.equal(body.keys[0]?.retry_after_ms, 900_000);
+});
+
+test('POST /v1/user/keys maps a concurrent unique violation to 409', async (t) => {
+  const { store } = makeMemoryStore();
+  // Two simultaneous submissions both pass the pre-check, so the second INSERT is
+  // what collides. Postgres reports that as SQLSTATE 23505, not an ApiError.
+  store.findByFingerprint = async () => null;
+  store.createUserProviderKey = async () => {
+    const error = new Error(
+      'duplicate key value violates unique constraint "idx_user_provider_keys_fingerprint"',
+    ) as Error & { code?: string };
+    error.code = '23505';
+    throw error;
+  };
+
+  const app = makeApp(store);
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/v1/user/keys',
+    headers: SESSION,
+    payload: { provider: 'openrouter', providerKey: 'sk-or-race' },
+  });
+
+  assert.equal(response.statusCode, 409, 'a lost race is a conflict, not a 500');
+});

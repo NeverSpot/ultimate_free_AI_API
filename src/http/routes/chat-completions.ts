@@ -90,7 +90,7 @@ export function assertSupported(body: unknown, log?: (message: string) => void):
 export function registerChatCompletions(
   app: FastifyInstance,
   deps: ServerDeps & ChatRouterDeps,
-): void {
+): RouterRuntime {
   const server = app.withTypeProvider<TypeBoxTypeProvider>();
   const now = deps.now ?? Date.now;
   const lru: LruMap = deps.lru ?? new Map<string, number>();
@@ -472,6 +472,11 @@ export function registerChatCompletions(
       }
     },
   );
+
+  // Exposed so the composition root can hand the SAME parking instance to other
+  // routes. Parking is constructed inside `buildRouterRuntime`, so without this
+  // nothing outside this module can reach the only real per-credential reader.
+  return routerRuntime;
 }
 
 function buildAdapterMap(

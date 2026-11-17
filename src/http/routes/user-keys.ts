@@ -60,6 +60,13 @@ function requireNonEmpty(fields: Record<string, string | undefined>): void {
 /** A key with no health reading: not parked, nothing to wait for. */
 const UNPARKED: ParkingStatus = { parked: false, retryAfterMs: 0 };
 
+/** Postgres `unique_violation`. Raised when two submissions race past the pre-check. */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' && error !== null && (error as { code?: unknown }).code === '23505'
+  );
+}
+
 function toKeySummary(key: UserProviderKey, status: ParkingStatus): KeySummaryType {
   return {
     id: key.id,
@@ -150,15 +157,26 @@ export function registerUserKeyRoutes(
       const forProvider = await store.listKeysByProvider(userId, provider);
       const label = request.body.label ?? `${provider}-${forProvider.length + 1}`;
 
-      const key = await store.createUserProviderKey({
-        user_id: userId,
-        provider,
-        label,
-        ciphertext,
-        iv,
-        auth_tag: authTag,
-        fingerprint,
-      });
+      let key: UserProviderKey;
+      try {
+        key = await store.createUserProviderKey({
+          user_id: userId,
+          provider,
+          label,
+          ciphertext,
+          iv,
+          auth_tag: authTag,
+          fingerprint,
+        });
+      } catch (error) {
+        // Two submissions can both pass the pre-check above and collide only at the
+        // unique index. Postgres reports that as SQLSTATE 23505, which would
+        // otherwise escape the error handler as a 500.
+        if (isUniqueViolation(error)) {
+          throw new ApiError('conflict', 'this key is already registered');
+        }
+        throw error;
+      }
 
       // A key that was just created cannot be parked: report it available.
       return reply.status(200).send(toKeySummary(key, UNPARKED));

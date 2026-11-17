@@ -22,7 +22,7 @@ import { registerUserRoutes } from './routes/user';
 import type { UserModel } from '../models/user';
 import type { UserProviderKeyModel } from '../models/user-provider-key';
 import type { OrganizationModel } from '../models/organization';
-import type { ParkingStatus } from '../resilience/parking';
+import type { Parking, ParkingStatus } from '../resilience/parking';
 
 export interface ServerDeps {
   config: Config;
@@ -44,10 +44,17 @@ export interface ServerDeps {
   userStore?: UserModel;
   providerKeyStore?: UserProviderKeyModel;
   /**
-   * Per-key park status for `/v1/user/keys`. Defaults to `parking.isParked` when
-   * omitted, and to "not parked" when there is no parking instance either.
+   * Force the per-key health reader for `/v1/user/keys`. Normally omitted — the
+   * server defaults it to the parking instance the router builds — and it reports
+   * "not parked" only when there is no parking at all.
    */
   isParked?: (credentialId: string) => Promise<ParkingStatus>;
+  /**
+   * Parking for the credential pool. The router builds one when this is omitted;
+   * supplying it lets a composition root share one instance with any other route
+   * that needs per-credential park state.
+   */
+  parking?: Parking;
   gatewayKeyAuth?: ReturnType<typeof createGatewayKeyAuth>;
   jwtCookieAuth?: JwtCookieAuth;
   orgStore?: OrganizationModel;
@@ -177,7 +184,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.register(metricsRoute);
 
   registerHealthz(app, deps.probes);
-  registerChatCompletions(app, deps);
+  // Keep the runtime: parking is constructed inside it, so its instance is the only
+  // real per-credential health reader in the process.
+  const chatRuntime = registerChatCompletions(app, deps);
   registerModelsRoute(app);
 
   // Auth is a core route. If production is built without a user store, fail at
@@ -194,16 +203,19 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   }
 
   if (deps.providerKeyStore) {
-    // `isParked` is the injection point for per-key health. The module-level
-    // `isParked` helper from `resilience/parking` is deliberately NOT used: nothing
-    // calls `configureParking`, so it throws on every call. Parking is currently
-    // built inside the router runtime, so until a composition root supplies a
-    // reader here the keys list reports every key as available.
+    const parking = chatRuntime.parking;
+    // The module-level `isParked` helper from `resilience/parking` is deliberately
+    // NOT used: nothing calls `configureParking`, so it throws on every call. The
+    // router's instance is the real reader, which is why per-key health works out
+    // of the box rather than needing a composition-root hook.
+    const keyHealth =
+      deps.isParked ?? (parking === undefined ? undefined : (id: string) => parking.isParked(id));
+
     registerUserKeyRoutes(app, {
       providerKeyStore: deps.providerKeyStore,
       getUserId: (req) => req.user?.id ?? null,
       encryptionKey: deps.config.encryptionKey,
-      isParked: deps.isParked,
+      isParked: keyHealth,
     });
   } else if (deps.config.nodeEnv === 'production') {
     throw new Error('buildServer: providerKeyStore is required when NODE_ENV=production');
