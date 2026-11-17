@@ -1,9 +1,10 @@
 'use client';
 
-import { FormEvent, Suspense, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Check, Copy } from 'lucide-react';
 import { api, type LoginResponse, type RegisterResponse } from '@/lib/api';
+import { useSession } from '@/hooks/use-session';
 
 export default function LoginPage() {
   return (
@@ -26,6 +27,11 @@ function LoginPageInner() {
   const setTab = (next: 'signin' | 'register') =>
     router.replace(next === 'register' ? '/login?tab=register' : '/login');
 
+  // The session cookie is httpOnly and scoped to `/v1/user/*`, so the server
+  // render cannot tell whether the visitor is signed in. Probe the session and
+  // bounce authenticated visitors to the keys dashboard.
+  const { user: sessionUser, loading: sessionLoading } = useSession();
+
   // Sign-in state
   const [signInUsername, setSignInUsername] = useState('');
   const [signInPassword, setSignInPassword] = useState('');
@@ -40,6 +46,14 @@ function LoginPageInner() {
   // Common status
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Signed-in visitors never see the auth form. `replace` (not `push`) keeps
+  // /login out of the back-button history, so Back cannot land here again.
+  useEffect(() => {
+    if (!sessionLoading && sessionUser) {
+      router.replace('/keys');
+    }
+  }, [sessionLoading, sessionUser, router]);
 
   async function onSignInSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -123,6 +137,16 @@ function LoginPageInner() {
     } catch {
       setError('Could not copy to clipboard');
     }
+  }
+
+  // Hold the placeholder while the probe runs and the redirect is in flight,
+  // so a signed-in visitor never sees the form flash before /keys loads.
+  if (sessionLoading || sessionUser) {
+    return (
+      <div className="flex flex-1 items-center justify-center px-4 py-20">
+        <div className="h-9 w-72 animate-pulse rounded-xl bg-slate-800/60" />
+      </div>
+    );
   }
 
   return (
