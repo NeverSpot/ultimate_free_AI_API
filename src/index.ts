@@ -24,7 +24,9 @@ async function main(): Promise<void> {
     throw new Error('DATABASE_URL is required');
   }
   const db = createDbClient(databaseUrl);
-  const userStore = createUserModel(db);
+  // Reversible storage of the gateway key: lets login re-issue the same key
+  // instead of forcing a "Get New" + password re-entry.
+  const userStore = createUserModel(db, config.encryptionKey);
   const providerKeyStore = createUserProviderKeyModel(db, config.encryptionKey);
   const gatewayKeyAuth = createGatewayKeyAuth({
     adminToken: config.adminToken,

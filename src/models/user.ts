@@ -8,6 +8,9 @@ export interface User {
   email: string;
   password_hash: string;
   gateway_api_key_hash: string;
+  gateway_api_key_enc?: Buffer | null;
+  gateway_api_key_iv?: Buffer | null;
+  gateway_api_key_auth_tag?: Buffer | null;
   created_at: Date;
 }
 
@@ -17,7 +20,12 @@ export interface NewUser {
   password: string;
 }
 
-export function createUserModel(db: DbExecutor) {
+/**
+ * `masterKey` enables reversible storage of the gateway API key so login can
+ * re-issue the same key. Omit it (tests, admin paths) and the key is stored as a
+ * hash only — auth still works, but it cannot be handed back.
+ */
+export function createUserModel(db: DbExecutor, masterKey?: string) {
   async function createUser({
     username,
     email,
@@ -26,12 +34,23 @@ export function createUserModel(db: DbExecutor) {
     const passwordHash = await crypto.hashPassword(password);
     const gatewayApiKeyPlaintext = 'gk_' + randomBytes(32).toString('hex');
     const gatewayApiKeyHash = crypto.sha256Hex(gatewayApiKeyPlaintext);
+    const enc = masterKey ? crypto.encryptAes256Gcm(gatewayApiKeyPlaintext, masterKey) : null;
 
     const result = await db.query<User>(
-      `insert into users (username, email, password_hash, gateway_api_key_hash)
-       values ($1, $2, $3, $4)
+      `insert into users
+         (username, email, password_hash, gateway_api_key_hash,
+          gateway_api_key_enc, gateway_api_key_iv, gateway_api_key_auth_tag)
+       values ($1, $2, $3, $4, $5, $6, $7)
        returning id, username, email, password_hash, gateway_api_key_hash, created_at`,
-      [username, email, passwordHash, gatewayApiKeyHash],
+      [
+        username,
+        email,
+        passwordHash,
+        gatewayApiKeyHash,
+        enc?.ciphertext ?? null,
+        enc?.iv ?? null,
+        enc?.authTag ?? null,
+      ],
     );
 
     const row = result.rows[0];
@@ -98,17 +117,63 @@ export function createUserModel(db: DbExecutor) {
   async function setGatewayApiKeyHash(userId: string): Promise<string> {
     const newPlaintext = 'gk_' + randomBytes(32).toString('hex');
     const newHash = crypto.sha256Hex(newPlaintext);
+    const enc = masterKey ? crypto.encryptAes256Gcm(newPlaintext, masterKey) : null;
     const result = await db.query(
       `update users
-       set gateway_api_key_hash = $1
-       where id = $2
+       set gateway_api_key_hash = $1,
+           gateway_api_key_enc = $2,
+           gateway_api_key_iv = $3,
+           gateway_api_key_auth_tag = $4
+       where id = $5
        returning id`,
-      [newHash, userId],
+      [newHash, enc?.ciphertext ?? null, enc?.iv ?? null, enc?.authTag ?? null, userId],
     );
     if ((result.rowCount ?? 0) === 0) {
       throw new Error('setGatewayApiKeyHash: user not found');
     }
     return newPlaintext;
+  }
+
+  /**
+   * Return the user's gateway API key, decrypting the stored copy.
+   *
+   * If no key is recoverable (legacy row from before encryption, or decryption
+   * fails) a fresh one is issued and stored, so every user always ends up with a
+   * usable key. Returns null only when encryption is not configured.
+   */
+  async function getOrCreateGatewayApiKey(userId: string): Promise<string | null> {
+    if (masterKey === undefined) {
+      return null;
+    }
+
+    const result = await db.query<{
+      gateway_api_key_enc: Buffer | null;
+      gateway_api_key_iv: Buffer | null;
+      gateway_api_key_auth_tag: Buffer | null;
+    }>(
+      `select gateway_api_key_enc, gateway_api_key_iv, gateway_api_key_auth_tag
+       from users where id = $1`,
+      [userId],
+    );
+
+    const row = result.rows[0];
+    if (row === undefined) {
+      return null;
+    }
+
+    const ciphertext = row.gateway_api_key_enc;
+    const iv = row.gateway_api_key_iv;
+    const authTag = row.gateway_api_key_auth_tag;
+
+    if (ciphertext && iv && authTag) {
+      try {
+        return crypto.decryptAes256Gcm(ciphertext, iv, authTag, masterKey);
+      } catch {
+        // Corrupt or re-keyed row — fall through and issue a fresh key.
+      }
+    }
+
+    return setGatewayApiKeyHash(userId);
   }
 
   return {
@@ -119,6 +184,7 @@ export function createUserModel(db: DbExecutor) {
     findByGatewayApiKeyHash,
     verifyPassword,
     setGatewayApiKeyHash,
+    getOrCreateGatewayApiKey,
   };
 }
 

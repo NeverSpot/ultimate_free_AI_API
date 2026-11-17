@@ -31,6 +31,9 @@ const credential: Credential = {
 function createFakeUserStore(): UserModel {
   const usersByName = new Map<string, User>();
   const passwords = new Map<string, string>();
+  // Stand-in for the AES-encrypted column: the fake store keeps the plaintext so
+  // it can model "login re-issues the same key".
+  const plaintextByUserId = new Map<string, string>();
 
   async function findByUsername(username: string): Promise<User | null> {
     return usersByName.get(username) ?? null;
@@ -101,9 +104,18 @@ function createFakeUserStore(): UserModel {
       if (user.id !== userId) continue;
       const newPlaintext = `gk_${randomBytes(32).toString('hex')}`;
       user.gateway_api_key_hash = `hash_${newPlaintext}`;
+      plaintextByUserId.set(userId, newPlaintext);
       return newPlaintext;
     }
     throw new Error('setGatewayApiKeyHash: user not found');
+  }
+
+  async function getOrCreateGatewayApiKey(userId: string): Promise<string | null> {
+    const exists = [...usersByName.values()].some((user) => user.id === userId);
+    if (!exists) {
+      return null;
+    }
+    return plaintextByUserId.get(userId) ?? (await setGatewayApiKeyHash(userId));
   }
 
   return {
@@ -114,6 +126,7 @@ function createFakeUserStore(): UserModel {
     findByGatewayApiKeyHash,
     verifyPassword,
     setGatewayApiKeyHash,
+    getOrCreateGatewayApiKey,
   };
 }
 
@@ -226,7 +239,7 @@ describe('POST /v1/auth/register', () => {
 });
 
 describe('POST /v1/auth/login and /v1/auth/regenerate-key', () => {
-  test('login succeeds with the right password and never returns the gateway key', async () => {
+  test('login re-issues the same gateway key on every login', async () => {
     const app = makeApp(createFakeUserStore());
     try {
       await post(app, '/v1/auth/register', {
@@ -235,14 +248,22 @@ describe('POST /v1/auth/login and /v1/auth/regenerate-key', () => {
         password: 'password123',
       });
 
-      const ok = await post(app, '/v1/auth/login', {
+      const first = await post(app, '/v1/auth/login', {
         username: 'dave',
         password: 'password123',
       });
-      assert.equal(ok.statusCode, 200, ok.body);
-      assert.equal(ok.json().username, 'dave');
-      assert.equal(ok.json().gateway_api_key, undefined);
-      assert.match(String(ok.headers['set-cookie']), /^jwt=.*HttpOnly/);
+      assert.equal(first.statusCode, 200, first.body);
+      assert.equal(first.json().username, 'dave');
+      assert.match(String(first.json().gateway_api_key), /^gk_/);
+      assert.match(String(first.headers['set-cookie']), /^jwt=.*HttpOnly/);
+
+      // Logging in again must hand back the identical key, not a rotated one.
+      const second = await post(app, '/v1/auth/login', {
+        username: 'dave',
+        password: 'password123',
+      });
+      assert.equal(second.statusCode, 200, second.body);
+      assert.equal(second.json().gateway_api_key, first.json().gateway_api_key);
 
       const bad = await post(app, '/v1/auth/login', {
         username: 'dave',

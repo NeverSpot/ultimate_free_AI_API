@@ -53,10 +53,14 @@ function LoginPageInner() {
       });
 
       const user = { userId: data.userId, username: data.username };
-      // Drop any key left by a previous user so /keys never shows a stale key
-      // while /me names someone else. The server key is not rotated here.
+      // The server re-issues the same gateway key on every login, so the client
+      // just stores what it was given. No key loss across sign-out or devices.
       localStorage.removeItem('gateway_api_key');
       localStorage.removeItem('gateway_key');
+      if (data.gateway_api_key) {
+        localStorage.setItem('gateway_api_key', data.gateway_api_key);
+        localStorage.setItem('gateway_key', data.gateway_api_key);
+      }
       localStorage.setItem('user', JSON.stringify(user));
 
       router.push('/keys');
@@ -100,6 +104,10 @@ function LoginPageInner() {
       localStorage.setItem('user', JSON.stringify(data.user));
       localStorage.setItem('gateway_api_key', data.gateway_api_key);
       localStorage.setItem('gateway_key', data.gateway_api_key);
+      // Remember which account this key belongs to, so a later sign-in by a
+      // DIFFERENT account can clear it without punishing the same account
+      // (which happens across sign-out, where `user` is gone).
+      localStorage.setItem('gateway_key_owner', data.user.username);
       setRegisteredKey(data.gateway_api_key);
 
       router.push('/keys');

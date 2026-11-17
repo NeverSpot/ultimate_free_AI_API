@@ -37,6 +37,7 @@ export function AuthNav() {
           try {
             localStorage.removeItem('gateway_api_key');
             localStorage.removeItem('gateway_key');
+            localStorage.removeItem('gateway_key_owner');
             localStorage.removeItem('user');
           } catch {
             /* ignore */

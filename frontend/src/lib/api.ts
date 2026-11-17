@@ -32,6 +32,8 @@ export interface RegisterResponse {
 export interface LoginResponse {
   userId: string;
   username: string;
+  /** The user's gateway API key, re-issued by the server on every login. */
+  gateway_api_key?: string;
 }
 
 export interface RegenerateKeyResponse {
