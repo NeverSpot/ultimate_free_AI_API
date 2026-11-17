@@ -1,7 +1,7 @@
 # Architecture Deep Dive
 
-Read `PROJECT.md` for the plan and the block order. This file records the decisions
-the code cannot show.
+This file records the design decisions the code cannot show: the routing signal
+order, the layer rules, and why each choice was made.
 
 ## Request Flow
 

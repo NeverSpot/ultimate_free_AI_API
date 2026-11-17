@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-11-10
-- **Supersedes:** the Express choice made implicitly in Block 2 of `PROJECT.md`
+- **Supersedes:** the Express choice made implicitly during Block 2 planning
 
 ## Context
 
@@ -46,7 +46,8 @@ Use **Fastify 5**.
 
 - **Streaming (Block 10) requires `reply.hijack()`** and direct writes to `reply.raw`. After
   hijack, Fastify must never touch the response again — sending a Fastify error after
-  hijacking corrupts the stream. This is the main new footgun and belongs in `AGENTS.md`.
+  hijacking corrupts the stream. This is the main new footgun for anyone extending the
+  streaming path.
 - Every route needs a `response` schema, or fields silently disappear.
 - Express middleware is not available. Nothing planned here needs it.
 
