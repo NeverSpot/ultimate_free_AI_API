@@ -30,7 +30,28 @@
 
 ## 1. When to invoke it
 
+Use the skill when you have a **spec or a set of requirements** for a multi-step task and you are about to touch code. It turns a decision you have already made into a plan someone else can execute.
+
+- Trigger phrase: `/superpowers:writing-plans`
+- It is **not** a substitute for deciding *what* to build. If the spec does not exist yet, run `superpowers:brainstorming` first — the plan argues from the spec, so a missing spec means a guessed plan.
+- It is **not** an implementation tool. It writes the plan; a separate skill (`superpowers:executing-plans` or `superpowers:subagent-driven-development`) does the work.
+- Where the file lands: `docs/superpowers/plans/YYYY-MM-DD-<feature>.md` normally; in plan mode (`/plan`) it lands in `.hermes/plans/` instead, so the plan stays with the workspace.
+
 ## 2. What to hand it
+
+Fill this block in and paste it. The more exact the values, the fewer guesses the plan has to make.
+
+```text
+Goal: <one sentence — what this builds>
+Workspace: <absolute path to the repo root>
+Files in scope: <exact paths you expect to change>
+Out of scope: <paths that must not be touched>
+Acceptance criteria: <what must be true when it is done>
+Gate: <the exact command that proves it — e.g. npm run verify>
+Dependencies: <any new package needing approval, or "none">
+```
+
+**The skill does not write code — it writes the plan someone else implements.** Every file, signature, and test in the output is a decision you are handing to the implementer, so vagueness in the input becomes guesswork downstream.
 
 ## 3. What comes back
 
