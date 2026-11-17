@@ -37,3 +37,6 @@ tmp/
 *.pid
 load/dist/
 .agents/
+
+# git worktrees
+.worktrees/
