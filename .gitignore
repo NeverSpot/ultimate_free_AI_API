@@ -40,3 +40,18 @@ load/dist/
 
 # git worktrees
 .worktrees/
+
+# agent tooling configs (created by editor agents; not project source)
+.claude/settings.json
+.claude/settings.json.bak
+.claude/skills/
+.codebuddy/
+.cursorrules
+.gemini/
+.kiro/
+.mcp.json
+.qoder/
+.windsurfrules
+CODEBUDDY.md
+GEMINI.md
+QODER.md
