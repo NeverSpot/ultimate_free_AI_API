@@ -10,10 +10,16 @@ const REQUEST_INIT: Pick<RequestInit, 'credentials' | 'cache'> = {
 };
 
 export interface KeySummary {
+  id: string;
   provider: string;
+  label: string;
   fingerprint: string;
   created_at: string;
   updated_at: string;
+  /** True while the gateway has this key parked after a provider throttle. */
+  parked: boolean;
+  /** Milliseconds until the park lifts; 0 when the key is available. */
+  retry_after_ms: number;
 }
 
 export interface ListKeysResponse {
