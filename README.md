@@ -17,14 +17,6 @@ Hosted LLM APIs throttle per *account*: one key is usually one strong model at r
 
 This gateway turns the keys you already own, across several providers, into one endpoint with pooled capacity: budget tracked per `(credential, model, window)`, each request routed to a target that still has headroom, load spread so no key idles while another is spent, and `429` failover on the provider's own `Retry-After`. **Rate limits are never hardcoded** — a numeric RPM in the source would be wrong by the end of the quarter.
 
-## What this is not
-
-- **Not an account factory.** No signup automation, identity or fingerprint rotation, or proxy layer.
-- **Not stealth.** Requests identify themselves; the gateway does not try to look like many clients.
-- **Not a licence to evade.** On `429` a credential is parked until the provider's own `retry-after`, then released — it never retries into a limit. Keys from accounts created to evade a per-account cap can breach provider terms and get banned.
-
-Pooling keys you legitimately control — a personal account, a work account, a second provider — is the intended use.
-
 ---
 
 ## Features
