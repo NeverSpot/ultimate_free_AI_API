@@ -71,3 +71,8 @@ docs/block-*.md
 docs/phase-*.md
 docs/superpowers/
 docs/worker-brief.md
+
+# generated output and root-level process docs
+/BLOCK_*.md
+eval-results.*
+load/report.*
