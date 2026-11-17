@@ -6,7 +6,8 @@ export interface User {
   id: string;
   username: string;
   email: string;
-  password_hash: string;
+  /** `null` for OAuth-only accounts, which must not authenticate by password. */
+  password_hash: string | null;
   gateway_api_key_hash: string;
   gateway_api_key_enc?: Buffer | null;
   gateway_api_key_iv?: Buffer | null;
@@ -18,6 +19,21 @@ export interface NewUser {
   username: string;
   email: string;
   password: string;
+  /** True once the address has been proven (OTP accepted, or provider-verified). */
+  emailVerified?: boolean;
+}
+
+export interface NewUserFromHash {
+  username: string;
+  email: string;
+  /** scrypt `saltHex:keyHex`, already computed by the OTP flow. */
+  passwordHash: string;
+  emailVerified?: boolean;
+}
+
+export interface NewOAuthUser {
+  username: string;
+  email: string;
 }
 
 /**
@@ -26,12 +42,12 @@ export interface NewUser {
  * hash only — auth still works, but it cannot be handed back.
  */
 export function createUserModel(db: DbExecutor, masterKey?: string) {
-  async function createUser({
-    username,
-    email,
-    password,
-  }: NewUser): Promise<{ user: User; gatewayApiKeyPlaintext: string }> {
-    const passwordHash = await crypto.hashPassword(password);
+  async function insertUser(input: {
+    username: string;
+    email: string;
+    passwordHash: string | null;
+    emailVerified: boolean;
+  }): Promise<{ user: User; gatewayApiKeyPlaintext: string }> {
     const gatewayApiKeyPlaintext = 'gk_' + randomBytes(32).toString('hex');
     const gatewayApiKeyHash = crypto.sha256Hex(gatewayApiKeyPlaintext);
     const enc = masterKey ? crypto.encryptAes256Gcm(gatewayApiKeyPlaintext, masterKey) : null;
@@ -39,17 +55,18 @@ export function createUserModel(db: DbExecutor, masterKey?: string) {
     const result = await db.query<User>(
       `insert into users
          (username, email, password_hash, gateway_api_key_hash,
-          gateway_api_key_enc, gateway_api_key_iv, gateway_api_key_auth_tag)
-       values ($1, $2, $3, $4, $5, $6, $7)
+          gateway_api_key_enc, gateway_api_key_iv, gateway_api_key_auth_tag, email_verified_at)
+       values ($1, $2, $3, $4, $5, $6, $7, case when $8 then now() else null end)
        returning id, username, email, password_hash, gateway_api_key_hash, created_at`,
       [
-        username,
-        email,
-        passwordHash,
+        input.username,
+        input.email,
+        input.passwordHash,
         gatewayApiKeyHash,
         enc?.ciphertext ?? null,
         enc?.iv ?? null,
         enc?.authTag ?? null,
+        input.emailVerified,
       ],
     );
 
@@ -58,6 +75,40 @@ export function createUserModel(db: DbExecutor, masterKey?: string) {
       throw new Error('createUser: no row returned');
     }
     return { user: row, gatewayApiKeyPlaintext };
+  }
+
+  async function createUser({
+    username,
+    email,
+    password,
+    emailVerified = false,
+  }: NewUser): Promise<{ user: User; gatewayApiKeyPlaintext: string }> {
+    const passwordHash = await crypto.hashPassword(password);
+    return insertUser({ username, email, passwordHash, emailVerified });
+  }
+
+  /**
+   * Same as `createUser`, but takes the hash the OTP flow already computed for
+   * the pending row. Re-hashing would burn another scrypt round for no gain.
+   */
+  async function createUserWithHash({
+    username,
+    email,
+    passwordHash,
+    emailVerified = false,
+  }: NewUserFromHash): Promise<{ user: User; gatewayApiKeyPlaintext: string }> {
+    return insertUser({ username, email, passwordHash, emailVerified });
+  }
+
+  /**
+   * OAuth signup: no password at all. `password_hash` stays null, and
+   * `verifyPassword` refuses it, so an OAuth account can never be password-guessed.
+   */
+  async function createOAuthUser({
+    username,
+    email,
+  }: NewOAuthUser): Promise<{ user: User; gatewayApiKeyPlaintext: string }> {
+    return insertUser({ username, email, passwordHash: null, emailVerified: true });
   }
 
   async function findByUsername(username: string): Promise<User | null> {
@@ -70,11 +121,12 @@ export function createUserModel(db: DbExecutor, masterKey?: string) {
     return result.rows[0] ?? null;
   }
 
+  /** Case-insensitive: the edge lowercases, but legacy rows may not be. */
   async function findByEmail(email: string): Promise<User | null> {
     const result = await db.query<User>(
       `select id, username, email, password_hash, gateway_api_key_hash, created_at
        from users
-       where email = $1`,
+       where lower(email) = lower($1)`,
       [email],
     );
     return result.rows[0] ?? null;
@@ -107,11 +159,21 @@ export function createUserModel(db: DbExecutor, masterKey?: string) {
     password: string,
   ): Promise<{ id: string; username: string; email: string } | null> {
     const user = await findByUsername(username);
-    if (!user) {
+    if (!user || user.password_hash === null) {
+      // OAuth-only accounts have no hash: treat exactly like a wrong password.
       return null;
     }
     const ok = await crypto.verifyPassword(password, user.password_hash);
     return ok ? { id: user.id, username: user.username, email: user.email } : null;
+  }
+
+  /** Set when an email is proven by another route (OAuth link to an existing account). */
+  async function markEmailVerified(userId: string): Promise<void> {
+    await db.query(
+      `update users set email_verified_at = now()
+       where id = $1 and email_verified_at is null`,
+      [userId],
+    );
   }
 
   async function setGatewayApiKeyHash(userId: string): Promise<string> {
@@ -175,11 +237,14 @@ export function createUserModel(db: DbExecutor, masterKey?: string) {
 
   return {
     createUser,
+    createUserWithHash,
+    createOAuthUser,
     findByUsername,
     findByEmail,
     findById,
     findByGatewayApiKeyHash,
     verifyPassword,
+    markEmailVerified,
     setGatewayApiKeyHash,
     getGatewayApiKey,
   };

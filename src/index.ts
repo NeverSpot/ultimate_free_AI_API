@@ -4,6 +4,9 @@ import { createGatewayKeyAuth } from './http/middleware/gateway-key-auth';
 import { buildServer } from './http/server';
 import { createUserModel } from './models/user';
 import { createUserProviderKeyModel } from './models/user-provider-key';
+import { createEmailVerificationModel } from './models/email-verification';
+import { createOAuthAccountModel } from './models/oauth-account';
+import { createMailer } from './lib/mailer';
 import { MockProviderAdapter } from './providers/mock';
 import { defaultAdapters } from './providers/defaults';
 import type { Credential } from './providers/types';
@@ -28,6 +31,25 @@ async function main(): Promise<void> {
   // instead of forcing a "Get New" + password re-entry.
   const userStore = createUserModel(db, config.encryptionKey);
   const providerKeyStore = createUserProviderKeyModel(db, config.encryptionKey);
+  const emailVerificationStore = createEmailVerificationModel(db);
+  const oauthAccounts = createOAuthAccountModel(db, config.encryptionKey);
+  const mailer = createMailer({
+    transport: config.mailTransport ?? 'console',
+    from: config.mailFrom ?? 'Ultimate Free AI <no-reply@localhost>',
+    ...(config.smtpHost !== undefined
+      ? {
+          smtp: {
+            host: config.smtpHost,
+            port: config.smtpPort ?? 587,
+            secure: config.smtpSecure ?? false,
+            ...(config.smtpUser !== undefined && config.smtpPass !== undefined
+              ? { user: config.smtpUser, pass: config.smtpPass }
+              : {}),
+          },
+        }
+      : {}),
+    ...(config.resendApiKey !== undefined ? { resendApiKey: config.resendApiKey } : {}),
+  });
   const gatewayKeyAuth = createGatewayKeyAuth({
     adminToken: config.adminToken,
     findUserByGatewayKey: (hash) => userStore.findByGatewayApiKeyHash(hash),
@@ -44,6 +66,9 @@ async function main(): Promise<void> {
     logger: true,
     userStore,
     providerKeyStore,
+    emailVerificationStore,
+    oauthAccounts,
+    mailer,
     gatewayKeyAuth,
   });
 

@@ -27,7 +27,8 @@ npm run start:all    # backend :8080 + frontend :3000
 # then open http://localhost:3000/keys
 ```
 
-**Scripted.** Password minimum 8 characters:
+**Scripted.** Password minimum 8 characters. Signup is two requests: the first mails a
+six-digit code and creates nothing; the second creates the account.
 
 ```bash
 curl -s -X POST http://localhost:8080/v1/auth/register \
@@ -37,10 +38,33 @@ curl -s -X POST http://localhost:8080/v1/auth/register \
 
 ```json
 {
+  "otp_required": true,
+  "email": "alice@example.com",
+  "expires_in_seconds": 600,
+  "dev_code": "123456"
+}
+```
+
+In development (`MAIL_TRANSPORT=console`) the code is printed in the backend log, and
+`OTP_DEV_RETURN_CODE=true` also returns it as `dev_code`. With SMTP or Resend configured
+it arrives by email instead.
+
+```bash
+curl -s -X POST http://localhost:8080/v1/auth/register/verify \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","code":"123456"}'
+```
+
+```json
+{
   "user": { "id": "db34…", "username": "alice", "email": "alice@example.com" },
   "gateway_api_key": "gk_…"
 }
 ```
+
+**Browser.** The login page also offers Google and GitHub sign-in when those providers
+are configured; both end on the same session cookie and gateway key. The redirect URLs
+to register are in the README's Authentication section.
 
 Rotate later with `POST /v1/auth/regenerate-key` (username + password).
 
@@ -225,7 +249,12 @@ free right now (wait, retry). Both carry `retry-after` in seconds.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| `POST` | `/v1/auth/register` | none | Create account; returns `gateway_api_key` |
+| `POST` | `/v1/auth/register` | none | Start email signup; mails a 6-digit code (`202`) |
+| `POST` | `/v1/auth/register/verify` | none | Accept the code; creates the account + `gateway_api_key` |
+| `POST` | `/v1/auth/register/resend` | none | Re-send the code (cooldown applies) |
+| `GET` | `/v1/auth/providers` | none | OAuth providers that are configured |
+| `GET` | `/v1/auth/oauth/:provider/start` | none | Begin Google / GitHub sign-in |
+| `GET` | `/v1/auth/oauth/:provider/callback` | none | Provider callback; sets the session cookie |
 | `POST` | `/v1/auth/login` | none | Username+password → session cookie + the same `gateway_api_key` |
 | `POST` | `/v1/auth/regenerate-key` | none | Rotate the gateway key |
 | `POST` | `/v1/auth/logout` | none | Clear the session cookie |

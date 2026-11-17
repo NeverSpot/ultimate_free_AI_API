@@ -36,6 +36,13 @@ function fakeUserStore(): UserModel {
     createUser: async () => {
       throw new Error('not used');
     },
+    createUserWithHash: async () => {
+      throw new Error('not used');
+    },
+    createOAuthUser: async () => {
+      throw new Error('not used');
+    },
+    markEmailVerified: async () => undefined,
     findByUsername: async () => null,
     findByEmail: async () => null,
     findById: async (id: string) =>

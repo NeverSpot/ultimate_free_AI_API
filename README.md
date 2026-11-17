@@ -98,10 +98,16 @@ Then:
 ```bash
 curl http://localhost:8080/healthz
 
-# Register, save a provider key, then chat
+# Sign up in two steps: start mails a 6-digit code; verify creates the account.
 curl -X POST localhost:8080/v1/auth/register \
   -H 'Content-Type: application/json' \
   -d '{"username":"you","email":"you@example.com","password":"<your-password>"}'
+
+# Local dev (MAIL_TRANSPORT=console) prints the code in the server log and,
+# while OTP_DEV_RETURN_CODE=true, returns it as `dev_code`.
+curl -X POST localhost:8080/v1/auth/register/verify \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","code":"123456"}'
 ```
 
 Full walkthrough: [docs/usage-guide.md](docs/usage-guide.md)
@@ -120,15 +126,60 @@ Copy `.env.example` to `.env`. **Never commit `.env`.**
 | `REDIS_URL` | yes | Redis connection string |
 | `PORT` | no | Gateway port, default **8080** |
 | `LOG_LEVEL` | no | `info` by default |
+| `FRONTEND_URL` | no | Browser origin for OAuth redirects, default `http://localhost:3000` |
+| `OAUTH_CALLBACK_BASE` | for OAuth | Public API origin; provider consoles whitelist `{base}/v1/auth/oauth/{provider}/callback` |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | Enables "Continue with Google" when both are set |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | no | Enables "Continue with GitHub" when both are set |
+| `MAIL_TRANSPORT` | in production | `console` (dev only), `smtp` or `resend` |
+| `MAIL_FROM` | no | OTP sender address |
+| `OTP_TTL_SECONDS` / `OTP_MAX_ATTEMPTS` / `OTP_RESEND_COOLDOWN_SECONDS` | no | OTP policy, defaults `600` / `5` / `60` |
+| `OTP_PEPPER` | no | HMAC pepper for stored codes, defaults to `MASTER_ENCRYPTION_KEY` |
 
 Provider keys are **not** set here in the BYOK path — each user submits their own through `POST /v1/user/keys`. The `*_KEYS` variables in `.env.example` are an optional operator pool used only by the smoke and registry scripts.
+
+
+## Authentication
+
+Three ways in, all ending at the same httpOnly session cookie and `gk_…` gateway key:
+
+| Method | How it works |
+|---|---|
+| Email + password | `POST /v1/auth/register` stores a pending row and mails a 6-digit code; `POST /v1/auth/register/verify` creates the account. No `users` row exists until the code is accepted, so an unverified address cannot reserve a username. |
+| Google | OAuth 2.0 + OIDC: PKCE, `state`, `nonce`, and an RS256 ID token verified against Google's JWKS. |
+| GitHub | OAuth 2.0 with `state`; the account uses a verified primary address from `GET /user/emails`. |
+
+The login page shows a provider button only when its client id and secret are set;
+`GET /v1/auth/providers` returns the enabled list (possibly empty).
+
+**Google setup.** In Google Cloud Console create an OAuth 2.0 Client ID (Web application)
+and add `{OAUTH_CALLBACK_BASE}/v1/auth/oauth/google/callback` as an authorized redirect
+URI. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+
+**GitHub setup.** In GitHub → Settings → Developer settings → OAuth Apps create an app
+whose callback URL is `{OAUTH_CALLBACK_BASE}/v1/auth/oauth/github/callback`. Set
+`GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`.
+
+**OTP mail.** `MAIL_TRANSPORT=console` prints the code to the server log for local
+development. Production requires `smtp` (`SMTP_HOST`, `SMTP_PORT`, optional
+`SMTP_USER`/`SMTP_PASS`) or `resend` (`RESEND_API_KEY`); boot fails instead of accepting
+unverified signups if neither is configured. Codes are stored as HMAC-SHA256 (never
+plaintext), expire after `OTP_TTL_SECONDS`, allow `OTP_MAX_ATTEMPTS` guesses, and can be
+re-sent once per `OTP_RESEND_COOLDOWN_SECONDS`.
+
+OAuth-only accounts have no password (`password_hash` is null), so password login returns
+`401` for them. Linking a provider to an existing account happens only when the provider
+asserts the email is verified. Migration `040` marks pre-existing accounts as verified so
+nobody is locked out on deploy.
 
 
 ## API surface
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/auth/register` · `/v1/auth/login` | Session cookie + gateway key |
+| `POST` | `/v1/auth/register` · `/v1/auth/register/verify` · `/v1/auth/register/resend` | Two-step email signup with OTP |
+| `GET` | `/v1/auth/providers` | OAuth providers that are actually configured |
+| `GET` | `/v1/auth/oauth/:provider/start` · `/callback` | Google / GitHub sign-in |
+| `POST` | `/v1/auth/login` | Password login; session cookie + gateway key |
 | `GET` | `/v1/user/me` | Current session user |
 | `GET` | `/v1/user/gateway-key` | Re-issue the same gateway key |
 | `GET` | `/v1/user/keys` | List keys, each with health |
@@ -147,7 +198,7 @@ Provider keys are **not** set here in the BYOK path — each user submits their 
 
 | Gate | Result (2026-11-18) |
 |---|---|
-| `npm run verify` | **438 tests, 0 failures** |
+| `npm run verify` | **478 tests, 0 failures** |
 | `npm run test:int` | Integration suites (needs `docker compose up`) |
 | `cd frontend && npm run build` | Production build of the dashboard |
 

@@ -35,6 +35,22 @@ export interface RegisterResponse {
   gateway_api_key: string;
 }
 
+/**
+ * Step 1 of signup: the server has mailed a code and created nothing yet. The
+ * account (and the gateway key) arrive from `/auth/register/verify`.
+ */
+export interface RegisterStartedResponse {
+  otp_required: true;
+  email: string;
+  expires_in_seconds: number;
+  /** Only present in development when OTP_DEV_RETURN_CODE is enabled. */
+  dev_code?: string;
+}
+
+export interface OAuthProvidersResponse {
+  providers: Array<'google' | 'github'>;
+}
+
 export interface LoginResponse {
   userId: string;
   username: string;
@@ -49,6 +65,16 @@ export interface GatewayKeyResponse {
 
 export interface RegenerateKeyResponse {
   gateway_api_key: string;
+}
+
+/** API origin without the `/v1` suffix, for browser navigations the server must see. */
+export function apiOrigin(): string {
+  return BASE_URL.replace(/\/v1\/?$/, '');
+}
+
+/** OAuth is a full-page redirect, not a fetch: the state cookie must ride it. */
+export function oauthStartUrl(provider: 'google' | 'github'): string {
+  return `${apiOrigin()}/v1/auth/oauth/${provider}/start`;
 }
 
 function getGatewayKey(): string | null {

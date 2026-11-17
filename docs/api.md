@@ -19,16 +19,61 @@ Body limit `2 MiB` (`MAX_BODY_BYTES`). Per-attempt timeout `10s`, total request 
 
 ## Auth & session — *Blocks 19–20 + JWT migration*
 
-### `POST /v1/auth/register`
+### `POST /v1/auth/register` — step 1 (sends the code)
 
 ```json
 { "username": "alice", "email": "alice@example.com", "password": "minimum-8-chars" }
 ```
 
-`201` with `{ user: { id, username, email }, gateway_api_key: "gk_…" }`. Also sets the
-session cookie. The key is stored as a SHA-256 hash for auth plus an AES-256-GCM copy that
-lets the owner view the same key again on `/keys`. Duplicate username/email → `409`; missing
-fields or a non-object body → `400`.
+`202` with `{ otp_required: true, email, expires_in_seconds }`. **No account exists yet**: the
+pending row lives in `email_verifications` holding a scrypt password hash and an
+HMAC-SHA256 of the six-digit code — never the code or the password in plaintext. Duplicate
+username/email → `409`; missing fields, a malformed address, a password under 8 characters or
+a non-object body → `400`; a code already sent inside `OTP_RESEND_COOLDOWN_SECONDS` → `429`
+with `Retry-After`. Development only (`OTP_DEV_RETURN_CODE=true`, ignored when
+`NODE_ENV=production`) the response also carries `dev_code`.
+
+### `POST /v1/auth/register/verify` — step 2 (creates the account)
+
+```json
+{ "email": "alice@example.com", "code": "123456" }
+```
+
+`201` with `{ user: { id, username, email }, gateway_api_key: "gk_..." }` and the session
+cookie — the same shape the one-shot register used to return. Wrong code → `400` stating the
+remaining attempts; no pending row, or an expired code → `400` (expired rows are deleted); the
+attempt budget (`OTP_MAX_ATTEMPTS`, default 5) spent → `429`. A consumed code cannot be
+replayed, and the account is only inserted once the code is accepted, so an unverified
+address can never reserve a username.
+
+### `POST /v1/auth/register/resend`
+
+`{ "email": "alice@example.com" }` → `202`, replacing the code and resetting the attempt
+counter. Same cooldown, so a second call inside the window → `429` + `Retry-After`; an address
+with no pending registration → `400`.
+
+### `GET /v1/auth/providers`
+
+`200 { providers: ["github","google"] }` — only providers with both a client id and a client
+secret. Always answers, with `[]` when none are configured, so the UI can hide the buttons.
+
+### `GET /v1/auth/oauth/:provider/start` and `/callback`
+
+`provider` is `google` or `github`. `/start` responds `302` to the provider with a random
+`state` (plus PKCE S256 and a `nonce` for Google) and sets an `oauth_state` cookie scoped to
+`Path=/v1/auth/oauth; HttpOnly; SameSite=Lax`. `Lax` is required: the callback is a top-level
+cross-site navigation, and `Strict` would drop the cookie and fail every login.
+
+`/callback` verifies the state, exchanges the code server-to-server, and for Google verifies
+the RS256 ID token against Google's JWKS (issuer, audience, expiry, nonce). It then signs in a
+known provider identity, links to an existing account **only when the provider asserts the
+email is verified**, or creates a new account with a username derived from the profile. It
+ends in a `302` to `{FRONTEND_URL}/keys` with the session cookie, or to
+`{FRONTEND_URL}/login?error=<code>` where `<code>` is one of `oauth_cancelled`,
+`oauth_state_mismatch`, `email_unverified`, `email_unavailable`, `oauth_not_configured` or
+`oauth_failed`. Provider tokens are stored AES-256-GCM encrypted and never appear in a URL.
+
+OAuth-only accounts have `password_hash = null`, so password login returns `401` for them.
 
 ### `POST /v1/auth/login`
 

@@ -16,7 +16,36 @@ export interface Config {
   githubClientId?: string;
   githubClientSecret?: string;
   oauthCallbackBase?: string;
+  /** Where the browser is sent after OAuth and what the API trusts for redirects. */
+  frontendUrl?: string;
+  /** 'console' logs the OTP locally; production requires 'smtp' or 'resend'. */
+  mailTransport?: MailTransport;
+  mailFrom?: string;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpSecure?: boolean;
+  smtpUser?: string;
+  smtpPass?: string;
+  resendApiKey?: string;
+  otpTtlSeconds?: number;
+  otpMaxAttempts?: number;
+  otpResendCooldownSeconds?: number;
+  /** Development-only: echo the code in the API response so the flow can be tested without mail. */
+  otpDevReturnCode?: boolean;
+  /** HMAC pepper for stored OTP codes; defaults to MASTER_ENCRYPTION_KEY. */
+  otpPepper?: string;
+  appName?: string;
 }
+
+const DEFAULT_FRONTEND_URL = 'http://localhost:3000';
+const DEFAULT_MAIL_FROM = 'Ultimate Free AI <no-reply@localhost>';
+const DEFAULT_OTP_TTL_SECONDS = 600;
+const DEFAULT_OTP_MAX_ATTEMPTS = 5;
+const DEFAULT_OTP_RESEND_COOLDOWN_SECONDS = 60;
+const DEFAULT_SMTP_PORT = 587;
+const APP_NAME = 'Ultimate Free AI';
+
+export type MailTransport = 'console' | 'smtp' | 'resend';
 
 const DEFAULT_PORT = 8080;
 export const DEFAULT_CORS_ORIGIN = 'http://localhost:3000';
@@ -92,6 +121,75 @@ export function loadConfig(raw: NodeJS.ProcessEnv): Config {
   const githubClientId = raw.GITHUB_CLIENT_ID?.trim() ?? '';
   const githubClientSecret = raw.GITHUB_CLIENT_SECRET?.trim() ?? '';
   const oauthCallbackBase = raw.OAUTH_CALLBACK_BASE?.trim() || DEFAULT_OAUTH_CALLBACK_BASE;
+  const frontendUrl = raw.FRONTEND_URL?.trim() || DEFAULT_FRONTEND_URL;
+  if (!/^https?:\/\/[^\s/]+/.test(frontendUrl)) {
+    problems.push(`FRONTEND_URL must be an absolute http(s) URL (got "${frontendUrl}")`);
+  }
+  if (!/^https?:\/\/[^\s/]+/.test(oauthCallbackBase)) {
+    problems.push(
+      `OAUTH_CALLBACK_BASE must be an absolute http(s) URL (got "${oauthCallbackBase}")`,
+    );
+  }
+
+  const mailTransportRaw = (raw.MAIL_TRANSPORT?.trim() || 'console').toLowerCase();
+  if (
+    mailTransportRaw !== 'console' &&
+    mailTransportRaw !== 'smtp' &&
+    mailTransportRaw !== 'resend'
+  ) {
+    problems.push(`MAIL_TRANSPORT must be console, smtp or resend (got "${mailTransportRaw}")`);
+  }
+  const mailTransport = mailTransportRaw as MailTransport;
+  const mailFrom = raw.MAIL_FROM?.trim() || DEFAULT_MAIL_FROM;
+  const smtpHost = raw.SMTP_HOST?.trim() || undefined;
+  const smtpPort = readPositiveInt(raw, 'SMTP_PORT', DEFAULT_SMTP_PORT, problems);
+  const smtpSecure =
+    raw.SMTP_SECURE !== undefined
+      ? raw.SMTP_SECURE.trim().toLowerCase() === 'true'
+      : smtpPort === 465;
+  const smtpUser = raw.SMTP_USER?.trim() || undefined;
+  const smtpPass = raw.SMTP_PASS?.trim() || undefined;
+  const resendApiKey = raw.RESEND_API_KEY?.trim() || undefined;
+
+  const otpTtlSeconds = readPositiveInt(raw, 'OTP_TTL_SECONDS', DEFAULT_OTP_TTL_SECONDS, problems);
+  const otpMaxAttempts = readPositiveInt(
+    raw,
+    'OTP_MAX_ATTEMPTS',
+    DEFAULT_OTP_MAX_ATTEMPTS,
+    problems,
+  );
+  const otpResendCooldownSeconds = readPositiveInt(
+    raw,
+    'OTP_RESEND_COOLDOWN_SECONDS',
+    DEFAULT_OTP_RESEND_COOLDOWN_SECONDS,
+    problems,
+  );
+  // Never honoured in production: echoing a live code over HTTP defeats the point.
+  const otpDevReturnCode =
+    raw.OTP_DEV_RETURN_CODE?.trim().toLowerCase() === 'true' && nodeEnv !== 'production';
+  const otpPepper = raw.OTP_PEPPER?.trim() || encryptionKey;
+
+  if (googleClientId.length > 0 !== googleClientSecret.length > 0) {
+    problems.push('GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together');
+  }
+  if (githubClientId.length > 0 !== githubClientSecret.length > 0) {
+    problems.push('GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be set together');
+  }
+
+  if (nodeEnv === 'production') {
+    if (mailTransport === 'console') {
+      problems.push('MAIL_TRANSPORT must be smtp or resend in production');
+    }
+    if (mailTransport === 'smtp' && smtpHost === undefined) {
+      problems.push('SMTP_HOST is required when MAIL_TRANSPORT=smtp');
+    }
+    if (mailTransport === 'smtp' && (smtpUser === undefined) !== (smtpPass === undefined)) {
+      problems.push('SMTP_USER and SMTP_PASS must be set together');
+    }
+    if (mailTransport === 'resend' && resendApiKey === undefined) {
+      problems.push('RESEND_API_KEY is required when MAIL_TRANSPORT=resend');
+    }
+  }
 
   if (problems.length > 0) {
     throw new Error(
@@ -116,6 +214,21 @@ export function loadConfig(raw: NodeJS.ProcessEnv): Config {
     githubClientId,
     githubClientSecret,
     oauthCallbackBase,
+    frontendUrl,
+    mailTransport,
+    mailFrom,
+    smtpHost,
+    smtpPort,
+    smtpSecure,
+    smtpUser,
+    smtpPass,
+    resendApiKey,
+    otpTtlSeconds,
+    otpMaxAttempts,
+    otpResendCooldownSeconds,
+    otpDevReturnCode,
+    otpPepper,
+    appName: APP_NAME,
   };
 }
 

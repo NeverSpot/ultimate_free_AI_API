@@ -158,11 +158,37 @@ export function createOAuthAccountModel(db: DbExecutor, masterKey: string) {
     return createAccount(input);
   }
 
+  /** Every provider linked to one account, for the settings page. */
+  async function findByUserId(userId: string): Promise<OAuthAccount[]> {
+    const result = await db.query<Record<string, unknown>>(
+      `select id, user_id, provider, provider_user_id, provider_email, access_token_encrypted, raw_profile, created_at, updated_at
+       from oauth_accounts
+       where user_id = $1
+       order by provider`,
+      [userId],
+    );
+    return result.rows.map(mapRow);
+  }
+
+  /**
+   * Remove a link. Never touches `users`: unlinking a provider must not delete
+   * the account, and callers must keep at least one other sign-in method.
+   */
+  async function unlink(userId: string, provider: string): Promise<boolean> {
+    const result = await db.query(
+      `delete from oauth_accounts where user_id = $1 and provider = $2`,
+      [userId, provider],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
   return {
     createAccount,
     findByProviderUserId,
     findById,
+    findByUserId,
     linkAccount,
+    unlink,
     getAccessToken,
   };
 }

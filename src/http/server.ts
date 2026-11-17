@@ -19,7 +19,12 @@ import { registerSpendCapRoutes } from './routes/spend-caps';
 import type { createGatewayKeyAuth } from './middleware/gateway-key-auth';
 import { createJwtAuth } from './middleware/jwt-auth';
 import { registerUserRoutes } from './routes/user';
+import { registerOAuthRoutes } from './routes/oauth';
 import type { UserModel } from '../models/user';
+import type { EmailVerificationModel } from '../models/email-verification';
+import type { OAuthAccountModel } from '../models/oauth-account';
+import { githubProvider, googleProvider, type OAuthProviderConfig } from '../lib/oauth/providers';
+import type { Mailer } from '../lib/mailer';
 import type { UserProviderKeyModel } from '../models/user-provider-key';
 import type { OrganizationModel } from '../models/organization';
 import type { Parking, ParkingStatus } from '../resilience/parking';
@@ -58,6 +63,12 @@ export interface ServerDeps {
   gatewayKeyAuth?: ReturnType<typeof createGatewayKeyAuth>;
   jwtCookieAuth?: JwtCookieAuth;
   orgStore?: OrganizationModel;
+  /** Pending email signups. Required for email registration; absent means 503 there. */
+  emailVerificationStore?: EmailVerificationModel;
+  /** OTP delivery. Required for email registration. */
+  mailer?: Mailer;
+  /** Linked provider identities. Required for OAuth sign-in. */
+  oauthAccounts?: OAuthAccountModel;
 }
 
 /** Structural type so server.ts does not import the JWT middleware implementation. */
@@ -196,10 +207,54 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       userStore: deps.userStore,
       jwtSecret: deps.config.jwtSecret,
       nodeEnv: deps.config.nodeEnv,
+      ...(deps.emailVerificationStore !== undefined
+        ? { verificationStore: deps.emailVerificationStore }
+        : {}),
+      ...(deps.mailer !== undefined ? { mailer: deps.mailer } : {}),
+      ...(deps.config.otpPepper !== undefined ? { otpPepper: deps.config.otpPepper } : {}),
+      ...(deps.config.otpTtlSeconds !== undefined
+        ? {
+            otpPolicy: {
+              ttlSeconds: deps.config.otpTtlSeconds,
+              maxAttempts: deps.config.otpMaxAttempts ?? 5,
+              resendCooldownSeconds: deps.config.otpResendCooldownSeconds ?? 60,
+            },
+          }
+        : {}),
+      ...(deps.config.appName !== undefined ? { appName: deps.config.appName } : {}),
+      ...(deps.config.otpDevReturnCode !== undefined
+        ? { devReturnCode: deps.config.otpDevReturnCode }
+        : {}),
     });
     registerUserRoutes(app, { userStore: deps.userStore });
+
+    const oauthProviders = oauthProvidersFromConfig(deps.config);
+    // Register even with zero providers: `/v1/auth/providers` must answer (with
+    // an empty list) so the UI can hide the buttons, and an unconfigured
+    // provider must redirect to the login page rather than 404 mid-flow.
+    if (deps.oauthAccounts !== undefined) {
+      registerOAuthRoutes(app, {
+        userStore: deps.userStore,
+        accounts: deps.oauthAccounts,
+        providers: oauthProviders,
+        redirectBase: deps.config.oauthCallbackBase ?? 'http://localhost:8080',
+        frontendUrl: deps.config.frontendUrl ?? DEFAULT_CORS_ORIGIN,
+        jwtSecret: deps.config.jwtSecret,
+        nodeEnv: deps.config.nodeEnv,
+      });
+    }
   } else if (deps.config.nodeEnv === 'production') {
     throw new Error('buildServer: userStore is required when NODE_ENV=production');
+  }
+
+  if (
+    deps.userStore &&
+    deps.config.nodeEnv === 'production' &&
+    deps.emailVerificationStore === undefined
+  ) {
+    // Email signup would answer 503 in production; fail at startup instead of in
+    // the user's face.
+    throw new Error('buildServer: emailVerificationStore is required when NODE_ENV=production');
   }
 
   if (deps.providerKeyStore) {
@@ -241,6 +296,26 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   }
 
   return app;
+}
+
+/** Only fully-configured providers become buttons; a half-configured one is a 500 waiting to happen. */
+function oauthProvidersFromConfig(
+  config: Config,
+): Partial<Record<'google' | 'github', OAuthProviderConfig>> {
+  const providers: Partial<Record<'google' | 'github', OAuthProviderConfig>> = {};
+  if (config.googleClientId && config.googleClientSecret) {
+    providers.google = googleProvider({
+      clientId: config.googleClientId,
+      clientSecret: config.googleClientSecret,
+    });
+  }
+  if (config.githubClientId && config.githubClientSecret) {
+    providers.github = githubProvider({
+      clientId: config.githubClientId,
+      clientSecret: config.githubClientSecret,
+    });
+  }
+  return providers;
 }
 
 export { ApiError };
