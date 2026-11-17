@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import { KeyRound, ShieldCheck, Zap } from 'lucide-react';
+import { HomeCta } from '@/components/home-cta';
 
 export default function Home() {
   return (
@@ -21,21 +21,8 @@ export default function Home() {
         that would 429 on one provider is routed to another that still has capacity.
       </p>
 
-      {/* Landing CTAs */}
-      <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-        <Link
-          href="/login?tab=register"
-          className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-6 py-3 text-base font-semibold text-slate-950 transition hover:bg-white shadow-lg shadow-white/5"
-        >
-          Create Account
-        </Link>
-        <Link
-          href="/login"
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-6 py-3 text-base font-semibold text-slate-200 transition hover:bg-slate-800"
-        >
-          Sign In
-        </Link>
-      </div>
+      {/* Landing CTAs — session-aware; see components/home-cta.tsx */}
+      <HomeCta />
 
       {/* Value Prop Highlights */}
       <div className="mt-20 grid max-w-4xl grid-cols-1 gap-6 sm:grid-cols-3 text-left">
