@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * sex — start the WHOLE project at once.
+ * start:all — start the WHOLE project at once.
  *
  *   npm run start:all
  *
@@ -68,10 +68,10 @@ function spawnTracked(label, cmd, args, env = {}, cwd = undefined) {
     cwd,
   });
   children.push({ label, child });
-  child.on('error', (err) => console.error(`[sex] ${label} failed to start: ${err.message}`));
+  child.on('error', (err) => console.error(`[start-all] ${label} failed to start: ${err.message}`));
   child.on('exit', (code) => {
     if (!shuttingDown) {
-      console.log(`\n[sex] ${label} exited with code ${code}`);
+      console.log(`\n[start-all] ${label} exited with code ${code}`);
     }
   });
   return child;
@@ -104,30 +104,30 @@ async function waitFor(url, timeoutMs, label) {
 }
 
 async function main() {
-  console.log('[sex] starting the whole stack');
+  console.log('[start-all] starting the whole stack');
 
   if (useDocker) {
-    console.log('[sex] 1/3  docker compose up (postgres + redis)');
+    console.log('[start-all] 1/3  docker compose up (postgres + redis)');
     const code = await run('docker', ['compose', 'up', '-d', '--wait']);
     if (code !== 0) {
-      console.error('[sex] docker compose failed. Is Docker Desktop running?');
+      console.error('[start-all] docker compose failed. Is Docker Desktop running?');
       process.exit(code);
     }
   } else {
-    console.log('[sex] 1/3  skipped docker (--no-docker)');
+    console.log('[start-all] 1/3  skipped docker (--no-docker)');
   }
 
   if (runMigrations) {
-    console.log('[sex] 2/3  applying database migrations');
+    console.log('[start-all] 2/3  applying database migrations');
     const code = await run('npm', ['run', 'db:migrate']);
     if (code !== 0) {
-      console.error('[sex] migrations failed — continuing anyway, but the API may error');
+      console.error('[start-all] migrations failed — continuing anyway, but the API may error');
     }
   } else {
-    console.log('[sex] 2/3  skipped migrations (--no-migrate)');
+    console.log('[start-all] 2/3  skipped migrations (--no-migrate)');
   }
 
-  console.log('[sex] 3/3  starting backend + frontend');
+  console.log('[start-all] 3/3  starting backend + frontend');
 
   // Backend: `npm run dev` reads PORT from .env
   spawnTracked('backend', 'npm', ['run', 'dev']);
@@ -135,24 +135,24 @@ async function main() {
   // Frontend: its own package.json, on port 3000
   spawnTracked('frontend', 'npm', ['run', 'dev'], {}, resolve(__dirname, '../frontend'));
 
-  console.log('[sex] waiting for services to become ready...');
+  console.log('[start-all] waiting for services to become ready...');
   await Promise.all([
     waitFor('http://localhost:3000', 90_000, 'frontend'),
     waitFor(`http://localhost:${BACKEND_PORT}/healthz`, 90_000, 'backend'),
   ]);
 
-  console.log('\n[sex] ─────────────────────────────────────────────');
-  console.log('[sex]  frontend   http://localhost:3000');
-  console.log(`[sex]  backend    http://localhost:${BACKEND_PORT}`);
-  console.log(`[sex]  health     http://localhost:${BACKEND_PORT}/healthz`);
-  console.log('[sex]  Ctrl+C to stop everything');
-  console.log('[sex] ─────────────────────────────────────────────\n');
+  console.log('\n[start-all] ─────────────────────────────────────────────');
+  console.log('[start-all]  frontend   http://localhost:3000');
+  console.log(`[start-all]  backend    http://localhost:${BACKEND_PORT}`);
+  console.log(`[start-all]  health     http://localhost:${BACKEND_PORT}/healthz`);
+  console.log('[start-all]  Ctrl+C to stop everything');
+  console.log('[start-all] ─────────────────────────────────────────────\n');
 }
 
 function shutdown(code = 0) {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log('\n[sex] shutting down...');
+  console.log('\n[start-all] shutting down...');
 
   for (const { label, child } of children) {
     try {
@@ -160,11 +160,11 @@ function shutdown(code = 0) {
     } catch {
       // already gone
     }
-    console.log(`[sex]   stopped ${label}`);
+    console.log(`[start-all]   stopped ${label}`);
   }
 
   if (useDocker && !keepDb) {
-    console.log('[sex]   stopping containers');
+    console.log('[start-all]   stopping containers');
     const killer = spawn('docker', ['compose', 'down'], { stdio: 'inherit', shell: isWindows });
     killer.on('exit', () => process.exit(code));
     return;
@@ -177,6 +177,6 @@ process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));
 
 main().catch((err) => {
-  console.error('[sex] fatal:', err?.message ?? err);
+  console.error('[start-all] fatal:', err?.message ?? err);
   shutdown(1);
 });
