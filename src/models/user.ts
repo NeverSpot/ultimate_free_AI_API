@@ -137,11 +137,12 @@ export function createUserModel(db: DbExecutor, masterKey?: string) {
   /**
    * Return the user's gateway API key, decrypting the stored copy.
    *
-   * If no key is recoverable (legacy row from before encryption, or decryption
-   * fails) a fresh one is issued and stored, so every user always ends up with a
-   * usable key. Returns null only when encryption is not configured.
+   * Returns null when no recoverable key exists (legacy row from before
+   * encryption). It NEVER reissues: rotating here would silently break a key the
+   * user already has configured in their agents. Legacy accounts keep working on
+   * their current key and recover persistence via an explicit "Get New".
    */
-  async function getOrCreateGatewayApiKey(userId: string): Promise<string | null> {
+  async function getGatewayApiKey(userId: string): Promise<string | null> {
     if (masterKey === undefined) {
       return null;
     }
@@ -165,15 +166,11 @@ export function createUserModel(db: DbExecutor, masterKey?: string) {
     const iv = row.gateway_api_key_iv;
     const authTag = row.gateway_api_key_auth_tag;
 
-    if (ciphertext && iv && authTag) {
-      try {
-        return crypto.decryptAes256Gcm(ciphertext, iv, authTag, masterKey);
-      } catch {
-        // Corrupt or re-keyed row — fall through and issue a fresh key.
-      }
+    if (!ciphertext || !iv || !authTag) {
+      return null;
     }
 
-    return setGatewayApiKeyHash(userId);
+    return crypto.decryptAes256Gcm(ciphertext, iv, authTag, masterKey);
   }
 
   return {
@@ -184,7 +181,7 @@ export function createUserModel(db: DbExecutor, masterKey?: string) {
     findByGatewayApiKeyHash,
     verifyPassword,
     setGatewayApiKeyHash,
-    getOrCreateGatewayApiKey,
+    getGatewayApiKey,
   };
 }
 

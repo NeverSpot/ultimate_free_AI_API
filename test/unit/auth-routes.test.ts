@@ -74,6 +74,7 @@ function createFakeUserStore(): UserModel {
       gateway_api_key_hash: `hash_${gatewayApiKeyPlaintext}`,
       created_at: new Date(),
     };
+    plaintextByUserId.set(user.id, gatewayApiKeyPlaintext);
     usersByName.set(username, user);
     passwords.set(username, password);
     return { user, gatewayApiKeyPlaintext };
@@ -110,12 +111,8 @@ function createFakeUserStore(): UserModel {
     throw new Error('setGatewayApiKeyHash: user not found');
   }
 
-  async function getOrCreateGatewayApiKey(userId: string): Promise<string | null> {
-    const exists = [...usersByName.values()].some((user) => user.id === userId);
-    if (!exists) {
-      return null;
-    }
-    return plaintextByUserId.get(userId) ?? (await setGatewayApiKeyHash(userId));
+  async function getGatewayApiKey(userId: string): Promise<string | null> {
+    return plaintextByUserId.get(userId) ?? null;
   }
 
   return {
@@ -126,7 +123,7 @@ function createFakeUserStore(): UserModel {
     findByGatewayApiKeyHash,
     verifyPassword,
     setGatewayApiKeyHash,
-    getOrCreateGatewayApiKey,
+    getGatewayApiKey,
   };
 }
 

@@ -45,7 +45,7 @@ function fakeUserStore(): UserModel {
     setGatewayApiKeyHash: async () => {
       throw new Error('not used');
     },
-    getOrCreateGatewayApiKey: async () => 'gk_test-key',
+    getGatewayApiKey: async () => 'gk_test-key',
   };
 }
 

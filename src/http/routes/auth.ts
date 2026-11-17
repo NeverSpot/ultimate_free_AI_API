@@ -81,8 +81,10 @@ export function registerAuthRoutes(
 
     // Hand back the same gateway key on every login. The server stores it
     // reversibly (AES-256-GCM), so signing out or switching devices never costs
-    // the user their key. A user with none gets one issued here.
-    const gatewayApiKey = await deps.userStore.getOrCreateGatewayApiKey(user.id);
+    // the user their key. Legacy accounts (pre-encryption) have no recoverable
+    // copy: the key is omitted, their current key keeps working, and one explicit
+    // "Get New" makes persistence permanent.
+    const gatewayApiKey = await deps.userStore.getGatewayApiKey(user.id);
 
     const token = signJwt({ userId: user.id, username: user.username }, deps.jwtSecret);
     reply.header('Set-Cookie', sessionCookie.serialize(token, deps.nodeEnv));
