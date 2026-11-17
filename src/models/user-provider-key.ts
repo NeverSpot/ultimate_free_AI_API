@@ -76,42 +76,45 @@ export function createUserProviderKeyModel(db: DbExecutor, masterKey: string) {
 
   async function updateKey(
     keyId: string,
+    userId: string,
     updates: Partial<
       Pick<UserProviderKey, 'provider' | 'ciphertext' | 'iv' | 'auth_tag' | 'fingerprint'>
     >,
   ): Promise<boolean> {
     const sets: string[] = [];
-    const params: unknown[] = [];
-    let paramIndex = 1;
+    // Owner is the first predicate: a key id alone must never be enough to reach
+    // another user's row.
+    const params: unknown[] = [userId, keyId];
 
+    // Placeholders follow the parameter list rather than a counter, so no
+    // assignment is left unread — and $1/$2 stay the owner and the key id.
     if (updates.provider !== undefined) {
-      sets.push(`provider = $${paramIndex++}`);
       params.push(updates.provider);
+      sets.push(`provider = $${params.length}`);
     }
     if (updates.ciphertext !== undefined) {
-      sets.push(`ciphertext = $${paramIndex++}`);
       params.push(updates.ciphertext);
+      sets.push(`ciphertext = $${params.length}`);
     }
     if (updates.iv !== undefined) {
-      sets.push(`iv = $${paramIndex++}`);
       params.push(updates.iv);
+      sets.push(`iv = $${params.length}`);
     }
     if (updates.auth_tag !== undefined) {
-      sets.push(`auth_tag = $${paramIndex++}`);
       params.push(updates.auth_tag);
+      sets.push(`auth_tag = $${params.length}`);
     }
     if (updates.fingerprint !== undefined) {
-      sets.push(`fingerprint = $${paramIndex++}`);
       params.push(updates.fingerprint);
+      sets.push(`fingerprint = $${params.length}`);
     }
     if (sets.length === 0) {
       return false;
     }
     sets.push('updated_at = now()');
-    params.push(keyId);
 
     const result = await db.query(
-      `update user_provider_keys set ${sets.join(', ')} where id = $${paramIndex}`,
+      `update user_provider_keys set ${sets.join(', ')} where user_id = $1 and id = $2`,
       params,
     );
     return (result.rowCount ?? 0) > 0;
@@ -126,6 +129,26 @@ export function createUserProviderKeyModel(db: DbExecutor, masterKey: string) {
       [userId],
     );
     return result.rows;
+  }
+
+  async function listKeysByProvider(userId: string, provider: string): Promise<UserProviderKey[]> {
+    const result = await db.query<UserProviderKey>(
+      `select id, user_id, provider, ciphertext, iv, auth_tag, fingerprint, created_at, updated_at
+       from user_provider_keys
+       where user_id = $1 and provider = $2
+       order by created_at`,
+      [userId, provider],
+    );
+    return result.rows;
+  }
+
+  async function deleteKeyById(userId: string, keyId: string): Promise<boolean> {
+    const result = await db.query(
+      `delete from user_provider_keys
+       where user_id = $1 and id = $2`,
+      [userId, keyId],
+    );
+    return (result.rowCount ?? 0) > 0;
   }
 
   async function getDecryptedKey(userId: string, keyId: string): Promise<string | null> {
@@ -157,6 +180,8 @@ export function createUserProviderKeyModel(db: DbExecutor, masterKey: string) {
     findByFingerprint,
     updateKey,
     listKeys,
+    listKeysByProvider,
+    deleteKeyById,
     getDecryptedKey,
     removeKey,
   };

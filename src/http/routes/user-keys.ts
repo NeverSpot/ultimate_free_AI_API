@@ -95,7 +95,12 @@ export function registerUserKeyRoutes(
       const existing = await store.findByUserIdAndProvider(userId, provider);
       let key: UserProviderKey;
       if (existing !== null) {
-        await store.updateKey(existing.id, { ciphertext, iv, auth_tag: authTag, fingerprint });
+        await store.updateKey(existing.id, userId, {
+          ciphertext,
+          iv,
+          auth_tag: authTag,
+          fingerprint,
+        });
         const refreshed = await store.findByUserIdAndProvider(userId, provider);
         if (refreshed === null) {
           throw new Error('registerUserKeyRoutes: upsert row disappeared');

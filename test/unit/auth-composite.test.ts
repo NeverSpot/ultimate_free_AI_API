@@ -58,6 +58,8 @@ function fakeProviderKeyStore(): UserProviderKeyModel {
     findByFingerprint: async () => null,
     updateKey: async () => false,
     listKeys: async () => [],
+    listKeysByProvider: async () => [],
+    deleteKeyById: async () => false,
     getDecryptedKey: async () => null,
     removeKey: async () => false,
   };
