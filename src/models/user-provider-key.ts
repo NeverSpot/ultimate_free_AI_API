@@ -1,5 +1,16 @@
 import type { DbExecutor } from '../db/client';
-import { decryptAes256Gcm } from '../lib/crypto';
+import { decryptAes256Gcm, sha256Hex } from '../lib/crypto';
+
+/**
+ * Identity of one provider key for one user, without decrypting.
+ *
+ * Key-derived, not (user, provider)-derived: that is what lets a user hold
+ * several keys for one provider. The userId component keeps the value scoped,
+ * so one user's fingerprint cannot be correlated against another's.
+ */
+export function providerKeyFingerprint(userId: string, provider: string, secret: string): string {
+  return sha256Hex(`${userId}\0${provider}\0${secret}`);
+}
 
 export interface UserProviderKey {
   id: string;
