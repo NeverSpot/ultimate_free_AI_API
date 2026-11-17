@@ -8,6 +8,7 @@ export type ErrorKind =
   | 'client'
   | 'conflict'
   | 'auth'
+  | 'not_found'
   | 'model_gone'
   | 'rate_limited'
   | 'timeout'

@@ -54,6 +54,8 @@ export function statusFor(kind: ErrorKind): number {
       return 409;
     case 'auth':
       return 401;
+    case 'not_found':
+      return 404;
     case 'model_gone':
       return 404;
     case 'rate_limited':
@@ -77,6 +79,7 @@ export function typeFor(kind: ErrorKind): string {
   switch (kind) {
     case 'client':
     case 'conflict':
+    case 'not_found':
     case 'model_gone':
     case 'too_long':
     case 'blocked':
@@ -100,6 +103,8 @@ export function codeFor(kind: ErrorKind): string {
       return 'invalid_request';
     case 'conflict':
       return 'key_already_registered';
+    case 'not_found':
+      return 'not_found';
     case 'auth':
       return 'invalid_api_key';
     case 'model_gone':

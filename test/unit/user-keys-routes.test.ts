@@ -213,3 +213,79 @@ test('POST /v1/user/keys accepts two different users holding the same secret', a
   assert.equal(rows.length, 2);
   assert.deepEqual(rows.map((r) => r.user_id).sort(), ['u1', 'u2']);
 });
+
+test('DELETE /v1/user/keys/:provider/:keyId removes exactly one key', async (t) => {
+  const { store, rows } = makeMemoryStore();
+  const app = makeApp(store);
+  t.after(async () => {
+    await app.close();
+  });
+
+  const first = await app.inject({
+    method: 'POST',
+    url: '/v1/user/keys',
+    headers: SESSION,
+    payload: { provider: 'openrouter', providerKey: 'sk-or-first' },
+  });
+  await app.inject({
+    method: 'POST',
+    url: '/v1/user/keys',
+    headers: SESSION,
+    payload: { provider: 'openrouter', providerKey: 'sk-or-second' },
+  });
+
+  const doomedId = (first.json() as { id: string }).id;
+  const survivors = rows.filter((row) => row.id !== doomedId);
+  assert.equal(survivors.length, 1);
+  const survivor = survivors[0];
+  assert.ok(survivor, 'the second key must still exist');
+
+  const deleted = await app.inject({
+    method: 'DELETE',
+    url: `/v1/user/keys/openrouter/${doomedId}`,
+    headers: SESSION,
+  });
+  assert.equal(deleted.statusCode, 200);
+
+  const listed = await app.inject({ method: 'GET', url: '/v1/user/keys', headers: SESSION });
+  const body = listed.json() as { keys: { id: string }[] };
+  assert.equal(body.keys.length, 1, 'exactly one key must be removed');
+  assert.equal(body.keys[0]?.id, survivor.id);
+});
+
+test('DELETE /v1/user/keys/:provider/:keyId cannot delete another user key', async (t) => {
+  const { store, rows } = makeMemoryStore();
+  const appA = makeApp(store, 'u1');
+  const appB = makeApp(store, 'u2');
+  t.after(async () => {
+    await appA.close();
+    await appB.close();
+  });
+
+  const created = await appA.inject({
+    method: 'POST',
+    url: '/v1/user/keys',
+    headers: SESSION,
+    payload: { provider: 'openrouter', providerKey: 'sk-or-owned-by-u1' },
+  });
+  const keyId = (created.json() as { id: string }).id;
+
+  const blocked = await appB.inject({
+    method: 'DELETE',
+    url: `/v1/user/keys/openrouter/${keyId}`,
+    headers: SESSION,
+  });
+
+  assert.equal(blocked.statusCode, 404, "another user's key must not be deletable");
+  assert.equal(rows.length, 1, "the owner's key must survive");
+
+  // The owner can delete it — without this, a 404 from a missing route would
+  // satisfy the assertion above for the wrong reason.
+  const allowed = await appA.inject({
+    method: 'DELETE',
+    url: `/v1/user/keys/openrouter/${keyId}`,
+    headers: SESSION,
+  });
+  assert.equal(allowed.statusCode, 200, 'the owner must be able to delete their own key');
+  assert.equal(rows.length, 0);
+});

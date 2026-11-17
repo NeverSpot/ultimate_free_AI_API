@@ -35,6 +35,13 @@ const Params = Type.Object({
   provider: Type.String(),
 });
 
+// Two segments: `:keyId` alone would collide with the provider names already
+// occupying that segment on the sibling delete route.
+const KeyParams = Type.Object({
+  provider: Type.String(),
+  keyId: Type.String(),
+});
+
 const DeleteResponse = Type.Object({
   ok: Type.Boolean(),
 });
@@ -134,6 +141,21 @@ export function registerUserKeyRoutes(
     async (request, reply) => {
       const userId = requireUserId(request, deps.getUserId);
       await store.removeKey(userId, request.params.provider);
+      return reply.status(200).send({ ok: true });
+    },
+  );
+
+  server.delete(
+    '/v1/user/keys/:provider/:keyId',
+    { schema: { params: KeyParams, response: { 200: DeleteResponse } } },
+    async (request, reply) => {
+      const userId = requireUserId(request, deps.getUserId);
+      const removed = await store.deleteKeyById(userId, request.params.keyId);
+      if (!removed) {
+        // 404 rather than 403 when the key belongs to someone else: the caller
+        // learns nothing about whether that id exists at all.
+        throw new ApiError('not_found', 'no such key');
+      }
       return reply.status(200).send({ ok: true });
     },
   );
