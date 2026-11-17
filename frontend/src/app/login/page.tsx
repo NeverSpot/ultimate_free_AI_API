@@ -104,10 +104,6 @@ function LoginPageInner() {
       localStorage.setItem('user', JSON.stringify(data.user));
       localStorage.setItem('gateway_api_key', data.gateway_api_key);
       localStorage.setItem('gateway_key', data.gateway_api_key);
-      // Remember which account this key belongs to, so a later sign-in by a
-      // DIFFERENT account can clear it without punishing the same account
-      // (which happens across sign-out, where `user` is gone).
-      localStorage.setItem('gateway_key_owner', data.user.username);
       setRegisteredKey(data.gateway_api_key);
 
       router.push('/keys');
@@ -226,7 +222,7 @@ function LoginPageInner() {
                   Account created successfully!
                 </p>
                 <p className="mt-1 text-xs text-slate-400">
-                  Save your gateway API key now. It is shown only once in plaintext.
+                  This is your gateway API key. You can view it any time on the Keys page.
                 </p>
                 <div className="mt-3 flex items-center gap-2">
                   <code className="flex-1 break-all rounded border border-slate-800 bg-slate-950 p-2 text-xs text-slate-200">

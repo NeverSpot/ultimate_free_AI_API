@@ -338,7 +338,7 @@ export async function execute(
 
       try {
         const response = await withTimeout(
-          (subSignal) => entry.adapter.chat(request, credential, subSignal),
+          (subSignal) => entry.adapter.chat({ ...request, model: modelId }, credential, subSignal),
           callTimeoutMs,
           `Provider timeout after ${callTimeoutMs}ms`,
           providerId,
@@ -682,7 +682,11 @@ export async function* executeStream(
       let firstItem: IteratorResult<CanonicalChunk>;
 
       try {
-        const streamIterable = entry.adapter.stream(request, credential, attemptController.signal);
+        const streamIterable = entry.adapter.stream(
+          { ...request, model: modelId },
+          credential,
+          attemptController.signal,
+        );
         upstreamIterator = streamIterable[Symbol.asyncIterator]();
         firstItem = await upstreamIterator.next();
       } catch (err) {

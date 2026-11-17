@@ -36,6 +36,11 @@ export interface LoginResponse {
   gateway_api_key?: string;
 }
 
+export interface GatewayKeyResponse {
+  /** The current key, or null for a legacy account with no recoverable copy. */
+  gateway_api_key: string | null;
+}
+
 export interface RegenerateKeyResponse {
   gateway_api_key: string;
 }

@@ -49,6 +49,7 @@ export function createProviderRegistry(adapters: ProviderAdapter[]): ProviderReg
 
   return {
     get(id: ProviderId): ProviderAdapter | undefined {
+      if (id === 'nvidia-nim') return byId.get('nvidia');
       return byId.get(id);
     },
     ids(): ProviderId[] {

@@ -200,31 +200,49 @@ describe('nvidia adapter', () => {
     }
   });
 
-  test('nvidia adapter: listModels maps models with is_free === null (not false)', async () => {
+  test('nvidia adapter: listModels marks preview chat models as is_free true', async () => {
     const modelsData = makeModelListResponse([
       { id: 'deepseek-ai/deepseek-v4.1-flash', owned_by: 'deepseek-ai' },
       { id: '01-ai/yi-large', owned_by: '01-ai' },
+      { id: 'nvidia/embed-qa-4', owned_by: 'nvidia' },
     ]);
     fetchMock = async () => new Response(JSON.stringify(modelsData), { status: 200 });
     adapter = new NvidiaNimAdapter({ baseUrl: BASE_URL, fetchImpl: fetchMock });
 
     const models = await adapter.listModels(makeCredential());
 
-    assert.equal(models.length, 2);
+    assert.equal(models.length, 3);
     assert.ok(models[0] !== undefined);
     assert.ok(models[1] !== undefined);
+    assert.ok(models[2] !== undefined);
     const model0 = models[0]!;
     const model1 = models[1]!;
+    const model2 = models[2]!;
     assert.equal(model0.id, 'deepseek-ai/deepseek-v4.1-flash');
     assert.equal(model0.provider, 'nvidia');
     assert.equal(model0.owned_by, 'deepseek-ai');
     assert.equal(model0.context_window, null);
-    assert.equal(model0.is_free, null);
+    assert.equal(model0.is_free, true);
     assert.equal(model1.id, '01-ai/yi-large');
-    assert.equal(model1.is_free, null);
-    // Explicitly assert it is NOT false
-    assert.notEqual(model0.is_free, false);
-    assert.notEqual(model1.is_free, false);
+    assert.equal(model1.is_free, true);
+    // Non-chat model (embed) stays null
+    assert.equal(model2.id, 'nvidia/embed-qa-4');
+    assert.equal(model2.is_free, null);
+    assert.notEqual(model2.is_free, false);
+  });
+
+  test('nvidia adapter: listModels marks custom baseUrl models as is_free null', async () => {
+    const modelsData = makeModelListResponse([
+      { id: 'deepseek-ai/deepseek-v4.1-flash', owned_by: 'deepseek-ai' },
+    ]);
+    fetchMock = async () => new Response(JSON.stringify(modelsData), { status: 200 });
+    adapter = new NvidiaNimAdapter({
+      baseUrl: 'https://enterprise-nim.internal/v1',
+      fetchImpl: fetchMock,
+    });
+
+    const models = await adapter.listModels(makeCredential());
+    assert.equal(models[0]!.is_free, null);
   });
 
   test('nvidia adapter: aborted signal maps to timeout', async () => {

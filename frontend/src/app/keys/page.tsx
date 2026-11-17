@@ -3,7 +3,13 @@
 import { FormEvent, useEffect, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, Copy, X, Edit2, Trash2, RefreshCw, Loader2 } from 'lucide-react';
-import { api, type KeySummary, type ListKeysResponse, type RegenerateKeyResponse } from '@/lib/api';
+import {
+  api,
+  type GatewayKeyResponse,
+  type KeySummary,
+  type ListKeysResponse,
+  type RegenerateKeyResponse,
+} from '@/lib/api';
 import { useSession } from '@/hooks/use-session';
 
 type ProviderId = 'openrouter' | 'nvidia-nim' | 'tokenharbor';
@@ -89,6 +95,8 @@ export default function KeysPage() {
   });
 
   const [loadingKeys, setLoadingKeys] = useState(true);
+  const [keyRestoreDone, setKeyRestoreDone] = useState(false);
+  const [keyNotRecoverable, setKeyNotRecoverable] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -107,6 +115,28 @@ export default function KeysPage() {
     }
 
     let cancelled = false;
+
+    // Restore the gateway key from the server so clearing localStorage does not
+    // hide it while the session cookie is still valid. Best-effort: a legacy
+    // account returns null and keeps whatever the banner below says.
+    api
+      .get<GatewayKeyResponse>('/user/gateway-key')
+      .then((res) => {
+        if (cancelled) return;
+        if (res?.gateway_api_key) {
+          storeGatewayKey(res.gateway_api_key);
+        } else {
+          // A legacy hash-only account: the key exists and still authenticates,
+          // but the server has no copy it can show.
+          setKeyNotRecoverable(true);
+        }
+      })
+      .catch(() => {
+        /* non-fatal: the local mirror or the banner covers it */
+      })
+      .finally(() => {
+        if (!cancelled) setKeyRestoreDone(true);
+      });
 
     api
       .get<ListKeysResponse>('/user/keys')
@@ -282,10 +312,20 @@ export default function KeysPage() {
         </div>
       </div>
 
-      {!gatewayKey && user && (
+      {!gatewayKey && user && keyRestoreDone && (
         <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-950/40 px-4 py-3 text-sm text-amber-300">
-          This browser has no gateway API key stored. Click <strong>Get New</strong> and confirm
-          your password to generate one.
+          {keyNotRecoverable ? (
+            <>
+              This account was created before encrypted key storage, so the server cannot show its
+              key here. Your existing gateway key still works. <strong>Get New</strong> rotates it
+              and immediately invalidates the old one — update every client that uses it.
+            </>
+          ) : (
+            <>
+              No gateway API key is stored in this browser, and it could not be restored from the
+              server. Reload the page to try again, or click <strong>Get New</strong> to issue one.
+            </>
+          )}
         </div>
       )}
 

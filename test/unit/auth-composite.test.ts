@@ -224,3 +224,45 @@ test('composite auth: /v1/user/me without a session -> 401', async (t) => {
   const res = await app.inject({ method: 'GET', url: '/v1/user/me' });
   assert.equal(res.statusCode, 401, res.body);
 });
+
+test('user chat: request with model "free" returns 503 exhausted when no free models are available', async (t) => {
+  const app = makeApp();
+  t.after(async () => {
+    await app.close();
+  });
+
+  const res = await app.inject({
+    method: 'POST',
+    url: '/v1/chat/completions',
+    headers: {
+      authorization: `Bearer ${GATEWAY_KEY}`,
+      'content-type': 'application/json',
+    },
+    payload: { model: 'free', messages: [{ role: 'user', content: 'hi' }] },
+  });
+  assert.equal(res.statusCode, 503, res.body);
+  const body = JSON.parse(res.body);
+  assert.equal(body.error.code, 'exhausted');
+});
+
+test('user chat: request with exact model like "gpt-4o" does not call paid model and stays inside free pool', async (t) => {
+  const app = makeApp();
+  t.after(async () => {
+    await app.close();
+  });
+
+  const res = await app.inject({
+    method: 'POST',
+    url: '/v1/chat/completions',
+    headers: {
+      authorization: `Bearer ${GATEWAY_KEY}`,
+      'content-type': 'application/json',
+    },
+    payload: { model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] },
+  });
+  // Since fakeProviderKeyStore has no free models, it cleanly returns 503 exhausted,
+  // never attempting to route to gpt-4o or returning a 404/invalid model error.
+  assert.equal(res.statusCode, 503, res.body);
+  const body = JSON.parse(res.body);
+  assert.equal(body.error.code, 'exhausted');
+});

@@ -142,16 +142,35 @@ export function registerChatCompletions(
 
       const userCredentials = await buildUserCredentials(req, deps);
 
-      // "free" / "auto" / no model -> offer every free model the caller can
-      // reach, then let select() rank them by the project's signal order.
+      // Strict Free-Tier Policy: User requests (gk_ key auth) ALWAYS route
+      // exclusively through the dynamically resolved free model pool.
+      // Callers cannot bypass the pool to invoke arbitrary or paid models.
       let candidates;
-      if (isFreeRequest(canonical.model) && userCredentials !== undefined) {
+      if (deps.candidates !== undefined) {
+        candidates = [...deps.candidates];
+      } else if (userCredentials !== undefined) {
         const freeCandidates = await resolveFreeCandidates(registry, userCredentials);
-        if (freeCandidates.length > 0) {
+        if (canonical.model && !isFreeRequest(canonical.model)) {
+          const requested = canonical.model.trim().toLowerCase();
+          const matched = freeCandidates.filter(
+            (c) =>
+              c.modelId.toLowerCase() === requested ||
+              c.modelId.toLowerCase().endsWith('/' + requested),
+          );
+          if (matched.length > 0) {
+            const others = freeCandidates.filter((c) => !matched.includes(c));
+            candidates = [...matched, ...others];
+          } else {
+            // Requested model is not in the free pool (e.g. "gpt-4o"):
+            // Ignore the paid model and route to the best available free model.
+            candidates = freeCandidates;
+          }
+        } else {
           candidates = freeCandidates;
         }
+      } else {
+        candidates = buildCandidates(deps, registry, canonical, userCredentials);
       }
-      candidates ??= buildCandidates(deps, registry, canonical, userCredentials);
       const policies = deps.policies ?? buildPolicies(candidates);
 
       if (isStream) {
@@ -491,17 +510,8 @@ function buildCandidates(
   // The pool/credential fallbacks below only apply to admin/test requests
   // where req.user is undefined (no gk_ key).
   if (userCredentials !== undefined) {
-    const candidates: Candidate[] = [];
-    for (const credential of userCredentials) {
-      const providerId = credential.provider;
-      candidates.push({
-        modelId: canonical.model ?? providerId,
-        credential,
-        providerId,
-        adapterId: providerId,
-      });
-    }
-    return candidates;
+    // User credentials must always be resolved via resolveFreeCandidates.
+    return [];
   }
 
   if (deps.pool !== undefined) {
@@ -557,7 +567,8 @@ async function buildUserCredentials(
   for (const key of keys) {
     const secret = await providerKeyStore.getDecryptedKey(req.user.id, key.id);
     if (secret !== null) {
-      credentials.push(makeCredential(key.provider, key.id, key.id, secret));
+      const provider = key.provider === 'nvidia-nim' ? 'nvidia' : key.provider;
+      credentials.push(makeCredential(provider, key.id, key.id, secret));
     }
   }
   return credentials;

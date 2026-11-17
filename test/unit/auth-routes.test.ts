@@ -28,7 +28,8 @@ const credential: Credential = {
 };
 
 /** In-memory stand-in for `createUserModel`: no database, no scrypt. */
-function createFakeUserStore(): UserModel {
+function createFakeUserStore(options: { legacyUsernames?: Iterable<string> } = {}): UserModel {
+  const legacyUsernames = new Set(options.legacyUsernames ?? []);
   const usersByName = new Map<string, User>();
   const passwords = new Map<string, string>();
   // Stand-in for the AES-encrypted column: the fake store keeps the plaintext so
@@ -74,7 +75,11 @@ function createFakeUserStore(): UserModel {
       gateway_api_key_hash: `hash_${gatewayApiKeyPlaintext}`,
       created_at: new Date(),
     };
-    plaintextByUserId.set(user.id, gatewayApiKeyPlaintext);
+    // A legacy row has the hash but no recoverable copy, like users created
+    // before migration 039.
+    if (!legacyUsernames.has(username)) {
+      plaintextByUserId.set(user.id, gatewayApiKeyPlaintext);
+    }
     usersByName.set(username, user);
     passwords.set(username, password);
     return { user, gatewayApiKeyPlaintext };
@@ -309,6 +314,84 @@ describe('POST /v1/auth/login and /v1/auth/regenerate-key', () => {
       assert.match(cookie, /^jwt=;/);
       assert.match(cookie, /Max-Age=0/);
       assert.match(cookie, /HttpOnly/);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('GET /v1/user/gateway-key', () => {
+  test('returns the same key the server re-issues, and the new key after rotation', async () => {
+    const app = makeApp(createFakeUserStore());
+    try {
+      const registered = await post(app, '/v1/auth/register', {
+        username: 'gwen',
+        email: 'gwen@example.com',
+        password: 'password123',
+      });
+      const cookie = String(registered.headers['set-cookie']).split(';')[0];
+      const key = registered.json().gateway_api_key as string;
+
+      const first = await app.inject({
+        method: 'GET',
+        url: '/v1/user/gateway-key',
+        headers: { cookie },
+      });
+      assert.equal(first.statusCode, 200, first.body);
+      assert.deepEqual(first.json(), { gateway_api_key: key });
+      assert.equal(first.headers['cache-control'], 'no-store');
+
+      const rotated = await post(app, '/v1/auth/regenerate-key', {
+        username: 'gwen',
+        password: 'password123',
+      });
+      const second = await app.inject({
+        method: 'GET',
+        url: '/v1/user/gateway-key',
+        headers: { cookie },
+      });
+      assert.equal(second.statusCode, 200, second.body);
+      assert.equal(second.json().gateway_api_key, rotated.json().gateway_api_key);
+      assert.notEqual(second.json().gateway_api_key, key);
+    } finally {
+      await app.close();
+    }
+  });
+
+  test('returns null for a legacy row, and login omits the key', async () => {
+    const app = makeApp(createFakeUserStore({ legacyUsernames: ['legacy'] }));
+    try {
+      await post(app, '/v1/auth/register', {
+        username: 'legacy',
+        email: 'legacy@example.com',
+        password: 'password123',
+      });
+
+      const login = await post(app, '/v1/auth/login', {
+        username: 'legacy',
+        password: 'password123',
+      });
+      assert.equal(login.statusCode, 200, login.body);
+      assert.equal(login.json().gateway_api_key, undefined);
+
+      const cookie = String(login.headers['set-cookie']).split(';')[0];
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v1/user/gateway-key',
+        headers: { cookie },
+      });
+      assert.equal(res.statusCode, 200, res.body);
+      assert.deepEqual(res.json(), { gateway_api_key: null });
+    } finally {
+      await app.close();
+    }
+  });
+
+  test('requires a session', async () => {
+    const app = makeApp(createFakeUserStore());
+    try {
+      const res = await app.inject({ method: 'GET', url: '/v1/user/gateway-key' });
+      assert.equal(res.statusCode, 401, res.body);
     } finally {
       await app.close();
     }

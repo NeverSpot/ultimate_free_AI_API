@@ -59,6 +59,30 @@ interface NvidiaModelListResponse {
   }>;
 }
 
+function isNvidiaFreeChatModel(id: string, baseUrl: string): boolean | null {
+  if (!baseUrl.includes('integrate.api.nvidia.com')) {
+    return null;
+  }
+  const nonChatSubstrings = [
+    'embed',
+    'clip',
+    'detector',
+    'guard',
+    'calibration',
+    'translate',
+    'rerank',
+    'safety',
+  ];
+  if (nonChatSubstrings.some((sub) => id.includes(sub))) {
+    return null;
+  }
+  // Exclude models that lack public preview chat endpoints on integrate.api.nvidia.com
+  if (id.startsWith('google/') || id.startsWith('bigcode/') || id.includes('cosmos-')) {
+    return null;
+  }
+  return true;
+}
+
 /** NVIDIA NIM provider adapter (OpenAI-compatible). */
 export class NvidiaNimAdapter implements ProviderAdapter {
   readonly id: ProviderId = 'nvidia';
@@ -224,7 +248,7 @@ export class NvidiaNimAdapter implements ProviderAdapter {
       provider: this.id,
       owned_by: model.owned_by,
       context_window: null,
-      is_free: null,
+      is_free: isNvidiaFreeChatModel(model.id, this.baseUrl),
     }));
   }
 }
