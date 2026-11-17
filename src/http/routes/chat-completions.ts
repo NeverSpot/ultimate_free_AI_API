@@ -549,7 +549,11 @@ function buildPolicies(candidates: ReadonlyArray<Candidate>): Map<string, LimitP
   return policies;
 }
 
-async function buildUserCredentials(
+/**
+ * Exported for its unit test: the dedupe below is a budget-correctness rule, not
+ * an implementation detail.
+ */
+export async function buildUserCredentials(
   req: FastifyRequest,
   deps: ServerDeps & ChatRouterDeps,
 ): Promise<Credential[] | undefined> {
@@ -564,12 +568,19 @@ async function buildUserCredentials(
 
   const keys: UserProviderKey[] = await providerKeyStore.listKeys(req.user.id);
   const credentials: Credential[] = [];
+  // One secret is one account, and the ledger keys budgets on the credential id.
+  // Two rows holding the same secret would otherwise each earn a budget for a
+  // single account, so the pool would believe in headroom that does not exist.
+  // The env path in `credentials/pool.ts` already dedupes for this same reason.
+  const seen = new Set<string>();
   for (const key of keys) {
     const secret = await providerKeyStore.getDecryptedKey(req.user.id, key.id);
-    if (secret !== null) {
-      const provider = key.provider === 'nvidia-nim' ? 'nvidia' : key.provider;
-      credentials.push(makeCredential(provider, key.id, key.id, secret));
+    if (secret === null || seen.has(secret)) {
+      continue;
     }
+    seen.add(secret);
+    const provider = key.provider === 'nvidia-nim' ? 'nvidia' : key.provider;
+    credentials.push(makeCredential(provider, key.id, key.id, secret));
   }
   return credentials;
 }
