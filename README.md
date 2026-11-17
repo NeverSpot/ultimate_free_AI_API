@@ -109,7 +109,7 @@ git clone https://github.com/NeverSpot/ultimate_free_AI_API.git
 cd ultimate_free_AI_API
 cp .env.example .env      # then set ADMIN_TOKEN, MASTER_ENCRYPTION_KEY, JWT_SECRET
 npm ci
-npm run sex               # docker (Postgres + Redis) -> migrate -> backend :8080 + frontend :3000
+npm run start:all         # docker (Postgres + Redis) -> migrate -> backend :8080 + frontend :3000
 ```
 
 Or step by step:

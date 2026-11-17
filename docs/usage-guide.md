@@ -6,8 +6,9 @@ models from many providers behind one API key**, so a request that would `429` o
 provider is routed to another that still has capacity. One endpoint, one key, N× the
 ceiling.
 
-It is **OpenAI-compatible**: point your client at `http://localhost:8081/v1` and
-authenticate with a `gk_…` gateway key.
+It is **OpenAI-compatible**: point your client at `http://localhost:8080/v1` and
+authenticate with a `gk_…` gateway key. `8080` is the default `PORT` from
+`.env.example`; if your `.env` sets a different one, substitute it in every example below.
 
 Full contract: [`docs/api.md`](./api.md). Architecture: [`docs/architecture.md`](./architecture.md).
 
@@ -22,14 +23,14 @@ keys page. Regenerating it immediately invalidates the old key.
 **Web UI (easiest).** Start the stack, open the keys page:
 
 ```bash
-npm run sex          # backend :8081 + frontend :3000
+npm run start:all    # backend :8080 + frontend :3000
 # then open http://localhost:3000/keys
 ```
 
 **Scripted.** Password minimum 8 characters:
 
 ```bash
-curl -s -X POST http://localhost:8081/v1/auth/register \
+curl -s -X POST http://localhost:8080/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","email":"alice@example.com","password":"correct-horse-battery"}'
 ```
@@ -53,7 +54,7 @@ Your keys stay yours. The gateway encrypts them at rest (AES-256-GCM) and uses t
 reach the upstream providers.
 
 ```bash
-curl -s -X POST http://localhost:8081/v1/user/keys \
+curl -s -X POST http://localhost:8080/v1/user/keys \
   -H "Authorization: Bearer $GATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"provider":"openrouter","providerKey":"sk-or-v1-…"}'
@@ -64,7 +65,7 @@ Supported providers: `openrouter`, `nvidia` (alias `nvidia-nim`), `tokenharbor`.
 Verify (metadata only — never the secret):
 
 ```bash
-curl -s http://localhost:8081/v1/user/keys -H "Authorization: Bearer $GATEWAY_API_KEY"
+curl -s http://localhost:8080/v1/user/keys -H "Authorization: Bearer $GATEWAY_API_KEY"
 ```
 
 **Strict BYOK:** with no provider key saved, every chat returns `503 exhausted`. There is no
@@ -80,7 +81,7 @@ Rotate: re-POST the same provider (it overwrites). Remove: `DELETE /v1/user/keys
 and the gateway picks for you:
 
 ```bash
-curl -s http://localhost:8081/v1/chat/completions \
+curl -s http://localhost:8080/v1/chat/completions \
   -H "Authorization: Bearer $GATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"free","messages":[{"role":"user","content":"Reply with exactly: OK"}],"max_tokens":32}'
@@ -110,7 +111,7 @@ gateway pick by capacity, task fit, spread and quality.
 **Discover what exists** — `GET /v1/models` returns a single model entry, `free`:
 
 ```bash
-curl http://localhost:8081/v1/models -H "Authorization: Bearer gk_…"
+curl http://localhost:8080/v1/models -H "Authorization: Bearer gk_…"
 ```
 
 For the full registry (including models you cannot request), use:
@@ -143,7 +144,7 @@ import os
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:8081/v1",
+    base_url="http://localhost:8080/v1",
     api_key=os.environ["GATEWAY_API_KEY"],   # your gk_… key
 )
 
@@ -166,7 +167,7 @@ npm install openai
 import OpenAI from "openai";
 
 const client = new OpenAI({
-  baseURL: "http://localhost:8081/v1",
+  baseURL: "http://localhost:8080/v1",
   apiKey: process.env.GATEWAY_API_KEY!,
 });
 
@@ -249,7 +250,7 @@ The httpOnly session cookie is accepted only on `/v1/user/*`; machine callers us
 ## 7. Run the stack
 
 ```bash
-npm run sex        # postgres + redis → migrations → backend :8081 → frontend :3000
+npm run start:all  # postgres + redis → migrations → backend :8080 → frontend :3000
 ```
 
 Flags: `--no-docker` (services already up), `--keep-db` (leave containers), `--no-migrate`.
@@ -258,7 +259,7 @@ Flags: `--no-docker` (services already up), `--keep-db` (leave containers), `--n
 Health check:
 
 ```bash
-curl -s http://localhost:8081/healthz
+curl -s http://localhost:8080/healthz
 ```
 
 ---
@@ -267,7 +268,7 @@ curl -s http://localhost:8081/healthz
 
 - [ ] `gk_…` key in an env var, not in source
 - [ ] At least one provider key saved (`POST /v1/user/keys`)
-- [ ] `base_url` = `http://localhost:8081/v1`
+- [ ] `base_url` = `http://localhost:8080/v1`
 - [ ] `model: "free"` (or omitted) unless you need a specific model
 - [ ] Handles `429` (back off) vs `503` (wait/retry) via `retry-after`
 - [ ] No unsupported parameters (`n`>1, `logprobs`, `tools`, `tool_choice`, `audio`)

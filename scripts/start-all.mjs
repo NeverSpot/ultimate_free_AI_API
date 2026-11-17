@@ -2,7 +2,7 @@
 /**
  * sex — start the WHOLE project at once.
  *
- *   npm run sex
+ *   npm run start:all
  *
  * Brings up, in order:
  *   1. Postgres + Redis (docker compose, profile-independent)
