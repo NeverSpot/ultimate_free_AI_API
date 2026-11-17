@@ -15,8 +15,9 @@ Full contract: [`docs/api.md`](./api.md). Architecture: [`docs/architecture.md`]
 
 ## 1. Get your gateway key
 
-The gateway key is a `gk_…` string, shown **once** in plaintext (only its SHA-256 hash is
-stored). Lose it and you regenerate — the old one dies immediately.
+The gateway key is a `gk_…` string. Its SHA-256 hash authenticates requests, and an
+AES-256-GCM copy is stored so the same key is returned on every login and shown on the
+keys page. Regenerating it immediately invalidates the old key.
 
 **Web UI (easiest).** Start the stack, open the keys page:
 
@@ -58,7 +59,7 @@ curl -s -X POST http://localhost:8081/v1/user/keys \
   -d '{"provider":"openrouter","providerKey":"sk-or-v1-…"}'
 ```
 
-Supported providers: `openrouter`, `groq`, `mistral`, `nvidia`, `ollama-cloud`, `tokenharbor`.
+Supported providers: `openrouter`, `nvidia` (alias `nvidia-nim`), `tokenharbor`.
 
 Verify (metadata only — never the secret):
 
@@ -98,10 +99,21 @@ What happens:
    ↓  executes with failover: on 429/5xx it parks that key and tries the next
 ```
 
-`"auto"` behaves the same as `"free"`. A **specific** model id is still honoured — send
-`openrouter/auto:free` and you get that model or a `404`, never a silent substitution.
+`"auto"` behaves the same as `"free"`.
 
-**Discover what exists** (a local CLI, not an HTTP endpoint — there is no `/v1/models`):
+User requests (gateway-key auth) always route through the **free model pool**. If you
+send a specific model id, the gateway prefers it **only if** it is in the free pool;
+otherwise it is ignored and your request runs on the best available free model — never
+a paid substitution, never a `404`. Send `"model": "free"` or omit `model` to let the
+gateway pick by capacity, task fit, spread and quality.
+
+**Discover what exists** — `GET /v1/models` returns a single model entry, `free`:
+
+```bash
+curl http://localhost:8081/v1/models -H "Authorization: Bearer gk_…"
+```
+
+For the full registry (including models you cannot request), use:
 
 ```bash
 npm run registry:list
@@ -109,8 +121,11 @@ npm run registry:list
 
 ```text
 provider     models  free  samples
-openrouter   434     17    inclusionai/ling-3.2-flash:free,baidu/ernie-5.5-flash-preview:free
-tokenharbor  84      4     mimo-v2.5:free,deepseek-v4-flash:free
+nvidia       32      18    bigcode/starcoder2-15b,google/gemma-3-12b-it,google/gemma-3-4b-it
+openrouter   435     17    inclusionai/ling-3.2-flash:free,baidu/ernie-5.5-flash-preview:free,thinkingmachines/inkling-2-small:free
+tokenharbor  85      4     mimo-v2.5:free,deepseek-v4-flash:free,deepseek-v4.1-flash:free
+
+total: 552 models, 39 free, 513 unknown
 ```
 
 ---
@@ -209,11 +224,12 @@ free right now (wait, retry). Both carry `retry-after` in seconds.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| `POST` | `/v1/auth/register` | none | Create account; returns `gateway_api_key` once |
-| `POST` | `/v1/auth/login` | none | Username+password → session cookie |
+| `POST` | `/v1/auth/register` | none | Create account; returns `gateway_api_key` |
+| `POST` | `/v1/auth/login` | none | Username+password → session cookie + the same `gateway_api_key` |
 | `POST` | `/v1/auth/regenerate-key` | none | Rotate the gateway key |
 | `POST` | `/v1/auth/logout` | none | Clear the session cookie |
 | `GET` | `/v1/user/me` | gateway key or cookie | Current user |
+| `GET` | `/v1/user/gateway-key` | gateway key or cookie | Your gateway key (`null` for a legacy account) |
 | `GET` | `/v1/user/keys` | gateway key or cookie | Your saved provider keys (metadata) |
 | `POST` | `/v1/user/keys` | gateway key or cookie | Save a provider key (encrypted) |
 | `DELETE` | `/v1/user/keys/:provider` | gateway key or cookie | Remove a provider key |
@@ -222,6 +238,11 @@ free right now (wait, retry). Both carry `retry-after` in seconds.
 | `GET` | `/healthz` | none | Liveness + dependency probes |
 
 The httpOnly session cookie is accepted only on `/v1/user/*`; machine callers use a `gk_…` key.
+
+> **Legacy accounts.** Accounts created before encrypted key storage existed have only a
+> SHA-256 hash on the server. Login and `GET /v1/user/gateway-key` cannot return their key,
+> but the current key keeps working. Regenerating issues a new key (and invalidates the old
+> one), after which both return it.
 
 ---
 

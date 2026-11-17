@@ -69,6 +69,11 @@ Redis itself) and returns ranked `(model, credential)` pairs.
 | 3 | **Spread** — least-recently-used credential | Prevent exhausting one key while others idle |
 | 4 | Quality within the bucket | Tie-break only |
 
+**Product policy:** requests authenticated with a gateway key (`gk_…`) route
+through the **free model pool only** — a named model id is preferred if it is free,
+otherwise the best available free model is used. Paid model names are never
+substituted and never return `404`.
+
 ### Rate-Limit Ledger (`src/limits/ledger.ts`, `src/limits/ledger.lua`)
 
 Fixed-window + sliding-window Lua script, per-credential RPM/RPD/TPM. One atomic

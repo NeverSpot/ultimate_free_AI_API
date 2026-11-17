@@ -106,7 +106,7 @@ Test 4 is the one that proves the product exists.
 - **Learn comes first.** 20 min reading, 40 min spike, then build.
 - If a block overruns 2x, cut scope — do not extend the block.
 
-**Phases:** A = aggregate keys · B = survive 429 · C = be good, not just available · D = prove it · E = user identity · F = provider key vault · G = user-aware routing · H = frontend dashboard.
+**Phases:** A = aggregate keys · B = survive 429 · C = be good, not just available · D = prove it · E = user identity · F = provider key vault · G = user-aware routing · H = frontend dashboard · I = multi-key pooling per provider.
 
 **Verification contract.** Every block closes on a runnable command, never on prose.
 Each command is created by the block that needs it — `AGENTS.md` lists only the ones
@@ -137,11 +137,13 @@ that exist today, so a command below becomes real when its block lands.
 | 20 | Gateway API key lifecycle | `POST /v1/auth/regenerate-key` invalidates old key, issues new one |
 |  | **Phase F — Provider Key Vault** |  |
 | 21 | Provider key storage backend | `test/unit/provider-key-store.test.ts` passes |
-| 22 | Provider key management routes | `GET/POST/PATCH/DELETE /v1/user/provider-keys` verified |
+| 22 | Provider key management routes | `GET/POST/DELETE /v1/user/keys` verified |
 |  | **Phase G — User-Aware Routing** |  |
 | 23 | Chat-completions routing via user keys | `POST /v1/chat/completions` with `gk_` key routes through user's keys |
 |  | **Phase H — Frontend Dashboard** |  |
 | 24 | Next.js dashboard | `cd frontend && npm run build` + `npm run verify` |
+|  | **Phase I — Multi-Key Pooling per Provider** |  |
+| 25 | Multi-key registration & per-provider capacity pooling | `npm run test -- --test-name-pattern "multi-key"` |
 
 ---
 
@@ -364,10 +366,10 @@ decision is what makes pooling possible later.
 - **Learn (2h):** password hashing with `crypto.scrypt`, JWT-less bearer token design, `gk_`-prefixed key format, SHA-256 key hashing for storage, AES-256-GCM encryption with `MASTER_ENCRYPTION_KEY`.
 - **Build:** `migrations/017_users.sql` (`users` + `user_provider_keys` tables), `src/lib/crypto.ts`, `src/models/user.ts`.
 - **Done when:** `POST /v1/auth/register` returns `gateway_api_key` starting with `gk_`; duplicate username/email returns 400.
-- **Pitfall:** plaintext key shown only once at registration — lost keys require regeneration (invalidation).
+- **Pitfall:** the key is a long-lived bearer credential — never log it, and never rotate it implicitly; a legacy hash-only row must keep working until an explicit regeneration.
 
 #### Block 20 — Gateway API key lifecycle
-- **Build:** `POST /v1/auth/regenerate-key` (username+password verify → invalidate old key → issue new one → return plaintext once).
+- **Build:** `POST /v1/auth/regenerate-key` (username+password verify → invalidate old key → issue new one → return the new plaintext).
 - **Done when:** regenerated key works; old key returns 401 immediately after rotation.
 - **Pitfall:** auth hook skips `/v1/auth/*` — regenerate-key must verify password directly, not rely on `req.user`.
 
@@ -379,9 +381,9 @@ decision is what makes pooling possible later.
 - **Pitfall:** `secret` is a non-enumerable own property — use `makeCredential()` from `pool.ts`, never raw `{ secret }` objects.
 
 #### Block 22 — Provider key management routes
-- **Build:** `src/http/routes/user-keys.ts` — `GET/POST/PATCH/DELETE /v1/user/provider-keys`.
-- **Done when:** all four verbs verified via `app.inject()` with correct 201/200/204/400/401 responses.
-- **Pitfall:** PATCH must return actual row data from DB, not hardcoded placeholders.
+- **Build:** `src/http/routes/user-keys.ts` — `GET/POST/DELETE /v1/user/keys`.
+- **Done when:** `GET`/`POST`/`DELETE` verified via `app.inject()` with correct 200/400/401 responses.
+- **Pitfall:** `DELETE /v1/user/keys/:provider` returns `200 { ok: true }`, not `204`.
 
 ### Phase G — User-Aware Routing
 
@@ -396,6 +398,18 @@ decision is what makes pooling possible later.
 - **Build:** `frontend/` — Next.js App Router (landing, login, keys pages), CORS on Fastify backend, API client wrapper.
 - **Done when:** `cd frontend && npm run build` exits 0; `npm run verify` exits 0; keys page loads provider keys from backend.
 - **Pitfall:** `frontend/` is an isolated workspace — do not add it to root `npm run verify` (keeps gate under 10s).
+
+### Phase I — Multi-Key Pooling per Provider (True Capacity Scaling)
+
+#### Block 25 — Multi-Key Registration & Per-Provider Key Sharding
+- **Problem:** Currently, each user can register at most one key per provider (unique constraint on `(user_id, provider)` in `user_provider_keys`). For free-tier models with strict RPM limits (e.g. 5–20 RPM), a single key quickly bottlenecks.
+- **Goal:** Allow users to register multiple API keys for the same provider (e.g. 3 OpenRouter keys, 2 NVIDIA keys) with custom labels (e.g. `openrouter-personal`, `openrouter-work`).
+- **Architecture:**
+  - **Database:** Relax `user_provider_keys` unique constraint from `(user_id, provider)` to `(user_id, provider, label)` or surrogate PK with unique label per provider.
+  - **Candidate Generation:** `buildUserCredentials()` produces one `Credential` object for *every* active key registered by the user.
+  - **Multi-Key Capacity Routing:** The pure selector (`select()`) evaluates all `(model, credential)` pairs. With multiple credentials for the same provider, the router's Spread (LRU) signal evenly distributes requests across the keys, multiplying effective capacity ($N \times$ RPM) and preventing 429 rate limit saturation.
+  - **Resilience:** If one key hits a 429 or parks its circuit breaker, failover immediately tries another credential for the same model/provider before failing over to other providers.
+- **Done when:** A user with multiple registered keys for a provider has requests distributed across all keys (LRU spread) and automatically fails over between keys on upstream 429s without client-facing errors.
 
 ---
 ## 7. Progress
@@ -474,7 +488,7 @@ directories — `AGENTS.md` carries the same map, and the two must stay in sync.
 - **Test runner:** `node:test` — zero dependencies.
 - **HTTP client:** native `fetch` only. No axios.
 - **Schema layer:** **TypeBox** (`@sinclair/typebox`) — native ajv integration, zero shims, types inferred from the schema so canonical types and HTTP schemas cannot drift.
-- **Gateway auth (Phase E, was Phase A):** two layers. (1) Shared admin token for internal/admin calls — constant-time compare in the `onRequest` hook. (2) User `gk_`-prefixed gateway keys (SHA-256 hashed in `users.gateway_key_hash`, plaintext shown once at register/regenerate) for `/v1/chat/completions` and `/v1/user/provider-keys`. Supersedes the Phase A shared-token plan; the `gateway_keys` table once earmarked for Block 11 was never created — keys live in `users`.
+- **Gateway auth (Phase E, was Phase A):** two layers. (1) Shared admin token for internal/admin calls — constant-time compare in the `onRequest` hook. (2) User `gk_`-prefixed gateway keys (SHA-256 hash in `users.gateway_api_key_hash` for auth, plus an AES-256-GCM copy in `users.gateway_api_key_enc` so login re-issues the same key) for `/v1/chat/completions` and `/v1/user/keys`. Supersedes the Phase A shared-token plan; the `gateway_keys` table once earmarked for Block 11 was never created — keys live in `users`.
 - **Response headers:** `x-request-id`, `x-gateway-provider`, `x-gateway-model`, `x-gateway-attempts`, `x-gateway-latency-ms`, `x-gateway-tokens-estimated`, plus `retry-after` on 429/503.
 - **Timeouts:** 10s per attempt, 30s total request deadline. Both env-configurable.
 - **HTTP framework:** **Fastify 5**. Native JSON Schema validation, `fast-json-stringify` serialisation that strips unknown fields, pino logging built in, and `app.inject()` for hermetic route tests. See `docs/adr/0002-http-framework.md`.

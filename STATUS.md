@@ -2,26 +2,21 @@
 
 > Handoff file. Read first, rewrite last. Keep under 25 lines.
 
-- **Current block:** None — Phases A–H complete through Block 24; Blocks 25–39 merged via agy
-- **Last green verify:** `npm run verify` -> exit 0, **402 tests**
-- **Phase A (Aggregate): COMPLETE.** Blocks 1–10 merged to master.
-- **Phase B (Survive 429): COMPLETE.** Blocks 6–10 merged.
-- **Phase C (Be good, not just available): COMPLETE.** Blocks 11–15 merged.
-- **Phase D (Prove it): COMPLETE.** Blocks 16–18 merged.
-- **Phase E (User Identity): COMPLETE.** JWT httpOnly-cookie auth; register/login/regenerate-key end-to-end; verified in-browser.
-- **Phase F (Provider Key Vault): COMPLETE.** Blocks 21–22 — provider-key store + user-keys routes.
-- **Phase G (User-Aware Routing): COMPLETE.** Block 23 — chat-completions routes via `gk_` user keys.
-- **Phase H (Frontend Dashboard): COMPLETE.** Block 24 — Next.js login/keys/dashboard; `npm run build` + `npm run verify` green.
+- **Current block:** None — Phases A–H complete; Phase I planned (Block 25)
+- **Last green verify:** `npm run verify` -> exit 0, **421 tests**
+- **Phases A–D (Core Engine): COMPLETE.** Blocks 1–18 merged (aggregators, 429 failover, eval, demo).
+- **Phases E–H (Auth, Vault & Dashboard): COMPLETE.** Blocks 19–24 merged (JWT, vault, user routing, Next.js).
+- **Free Pool Status:** 39 free models aggregated (OpenRouter: 17, NVIDIA NIM: 18, TokenHarbor: 4). Strict free-tier routing enforced.
 
 ## Done
 
-- Blocks 1–24 merged to master; Blocks 25–39 merged via agy (observability, SDK/CLI, orgs, spend caps, OAuth)
-- Auth + frontend verified in browser; `npm run sex` one-command stack starter added; `verify` gate clean
+- Free model execution bug fixed; NVIDIA NIM free endpoints enabled; exact-model bypass prevented.
+- Gateway API key request routing verified live on port 8081 (421 unit tests passing).
 
 ## Next
 
-- Decide project scope / Phase I; this file reflects reality going forward
+- Phase I / Block 25: Multi-key pooling per provider (multi-key registration for $N \times$ RPM throughput).
 
 ## Do not touch without a human
 
-`PROJECT.md` structure, `.env` / `.env.local`, git history rewrites, `git push` (no remote).
+`PROJECT.md` core structure, `.env` / `.env.local`, git history rewrites, `git push` (no remote).

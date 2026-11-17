@@ -25,9 +25,10 @@ Body limit `2 MiB` (`MAX_BODY_BYTES`). Per-attempt timeout `10s`, total request 
 { "username": "alice", "email": "alice@example.com", "password": "minimum-8-chars" }
 ```
 
-`201` with `{ user: { id, username, email }, gateway_api_key: "gk_…" }`. The gateway key is
-returned **once** in plaintext; only its SHA-256 hash is stored. Also sets the session cookie.
-Duplicate username/email → `409`; missing fields or a non-object body → `400`.
+`201` with `{ user: { id, username, email }, gateway_api_key: "gk_…" }`. Also sets the
+session cookie. The key is stored as a SHA-256 hash for auth plus an AES-256-GCM copy that
+lets the owner view the same key again on `/keys`. Duplicate username/email → `409`; missing
+fields or a non-object body → `400`.
 
 ### `POST /v1/auth/login`
 
@@ -35,14 +36,16 @@ Duplicate username/email → `409`; missing fields or a non-object body → `400
 { "username": "alice", "password": "minimum-8-chars" }
 ```
 
-`200` with `{ userId, username }` and a `Set-Cookie` session. Never returns the gateway key.
-Wrong credentials → `401`.
+`200` with `{ userId, username }` and a `Set-Cookie` session. The same key is re-issued
+(the server decrypts its stored copy); a legacy account created before encrypted storage has
+no recoverable copy, so `gateway_api_key` is omitted and its current key keeps authenticating
+until an explicit `POST /v1/auth/regenerate-key`. Wrong credentials → `401`.
 
 ### `POST /v1/auth/regenerate-key`
 
 Username + password verify directly (the `/v1/auth/*` routes are exempt from the session
-hook). Invalidates the old key immediately and returns
-`{ gateway_api_key: "gk_…" }` once. The old key then returns `401`.
+hook). Invalidates the old key immediately and returns `{ gateway_api_key: "gk_…" }`; that
+key is stored encrypted for later logins. The old key then returns `401`.
 
 ### `POST /v1/auth/logout`
 
@@ -53,6 +56,13 @@ revoke an already-stolen token; tokens expire after 7 days.
 
 Requires the session cookie (or a gateway key). `200 { id, username, email }`,
 `Cache-Control: no-store`. The frontend bootstraps its header and keys page from this.
+
+### `GET /v1/user/gateway-key`
+
+Requires the session cookie (or a gateway key). `200 { gateway_api_key: "gk_…" | null }`,
+`Cache-Control: no-store`. Decrypts the stored copy and returns the same key login would
+issue — it never rotates. `null` for a legacy hash-only account. The keys page calls this on
+load, so clearing `localStorage` no longer hides the key while the session is valid.
 
 ### Session cookie contract
 
@@ -91,7 +101,7 @@ OpenAI-compatible so a stock SDK works by changing `base_url` alone.
 | `max_tokens` | integer ≥ 1 | no | |
 | `stop` | string \| string[1–4] | no | |
 | `response_format` | `{type:'text'}` \| `{type:'json_object'}` | no | |
-| `stream` | boolean | no | default false. **`true` → `501` until Block 10** |
+| `stream` | boolean | no | default false. `true` → SSE (`text/event-stream`); failover only before the first chunk |
 | `user` | string | no | accepted, passed through |
 
 ### Ignored vs rejected — the rule that keeps `base_url` swap honest
@@ -106,7 +116,7 @@ So the boundary is lenient by default, with a hard split:
 | Class | Examples | Behaviour |
 |---|---|---|
 | **Harmless** — cannot change the answer | `seed`, `presence_penalty`, `frequency_penalty`, `logit_bias`, `store`, `metadata`, `service_tier`, `user` | accepted, **ignored**, logged at debug |
-| **Meaning-changing** — we cannot honour it | `n` > 1, `logprobs`, `top_logprobs`, `tools`, `tool_choice`, `modalities`, `audio`, `stream: true` (until Block 10) | **`501 unsupported`** |
+| **Meaning-changing** — we cannot honour it | `n` > 1, `logprobs`, `top_logprobs`, `tools`, `tool_choice`, `modalities`, `audio` | **`501 unsupported`** |
 | **Malformed** — wrong type or missing required | `messages` absent, `temperature: "hot"` | **`400 invalid_request_error`** |
 
 The principle: **ignore only what cannot change the answer; reject loudly what would.** A
@@ -156,16 +166,16 @@ one line.
 | 200 | served | — |
 | 400 | invalid body, `too_long`, `content_filter` | `invalid_request_error` |
 | 401 | missing or wrong gateway key | `authentication_error` |
-| 404 | requested model not known to the registry | `invalid_request_error` |
-| 429 | *this client* over its own limit (Block 13) | `rate_limit_error` |
-| 501 | `stream: true` before Block 10, or unsupported parameter | `invalid_request_error` |
+| 404 | `model_gone` from an upstream — admin-token requests only; `gk_` requests never 404, they fall back to the free pool | `invalid_request_error` |
+| 429 | every reachable candidate is rate-limited or parked (upstream limits, not a per-client quota) | `rate_limit_error` |
+| 501 | unsupported parameter (`n` > 1, `logprobs`, `tools`, …) | `invalid_request_error` |
 | 502 | every candidate failed with an upstream error | `api_error` |
-| 503 | **all candidates parked** — upstream capacity exhausted | `service_unavailable` |
+| 503 | no candidate has remaining capacity (`exhausted`), or every attempt failed with an upstream 5xx | `service_unavailable` |
 | 504 | total deadline exceeded | `api_error` |
 
-**429 vs 503 is a deliberate distinction.** `429` means *you* are throttled; `503` means *we*
-are out of upstream capacity. Different client behaviour follows: slow down vs retry later.
-Both carry `retry-after`.
+**429 vs 503 is a deliberate distinction.** `429` means every reachable candidate is
+rate-limited or parked — an upstream limit, not a per-client quota. `503` means no candidate
+is available at all. Both are retryable and both carry `retry-after`.
 
 ### Error envelope — every non-2xx, no exceptions
 
@@ -220,25 +230,34 @@ toward rate limits and are never routed to a provider.**
 
 ---
 
-## GET /v1/models — *Block 4/5*
+## GET /v1/models — OpenAI-compatible discovery
+
+**Auth required** — a gateway key (`Authorization: Bearer gk_…`) or the shared admin
+token. The JWT session cookie is **not** accepted here (it is scoped to `/v1/user/*`);
+without a bearer credential, `401`.
 
 ```json
 {
   "object": "list",
   "data": [
     {
-      "id": "llama-3.3-70b-versatile",
+      "id": "free",
       "object": "model",
-      "owned_by": "openrouter",
-      "context_window": 131072,
-      "is_free": true
+      "created": 0,
+      "owned_by": "gateway"
     }
   ]
 }
 ```
 
-OpenAI-compatible shape plus additive fields. Served from the registry cache — **never**
-queries a provider on request. `context_window` and `is_free` are `null` when undiscovered.
+**One model, by design.** The gateway picks the actual model at request time
+(capacity → task fit → spread), so discovery does not enumerate the pool — it
+advertises the single keyword callers use. Send `"model": "free"` (or omit
+`model`) to chat; sending any other model id still routes through the free pool.
+
+Clients that treat a model list as a hard contract (Continue.dev, agy, Codex,
+Claude Code) can enable discovery against this endpoint without special-casing:
+it returns exactly one id, and that id is the one that works.
 
 ---
 
@@ -246,13 +265,11 @@ queries a provider on request. `context_window` and `is_free` are `null` when un
 
 | Gap | Behaviour now | Closes at |
 |---|---|---|
-| `stream: true` | `501 unsupported` | Block 10 |
 | `tools` / `tool_choice` | `501 unsupported` | post-Block 12, if eval needs it |
 | `logprobs` / `top_logprobs` | `501 unsupported` | never |
 | `n` > 1 | `501 unsupported` | never (single choice by design) |
 | `idempotency-key` | accepted, **ignored**, logged at debug | Block 15 |
 | `seed`, `presence_penalty`, etc. | accepted, ignored | never |
 | Per-client rate limiting | absent — only the gateway key is checked | Block 13 |
-| `/v1/models` | `501` | Block 4 |
 
 A silent no-op is worse than a `501`. Anything unimplemented fails loudly.
