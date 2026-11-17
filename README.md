@@ -1,6 +1,6 @@
 # LLM Gateway (BYOK)
 
-> One OpenAI-compatible endpoint in front of **a pool of provider API keys you already own**. Rate-limit-aware routing, per-credential quota ledgers, automatic failover, and multiple keys per provider.
+> One OpenAI-compatible endpoint in front of **a pool of provider API keys you already own** — rate-limit-aware routing, per-credential quota ledgers, automatic failover, and several keys per provider.
 
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Node](https://img.shields.io/badge/node-%E2%89%A524-brightgreen)
@@ -13,24 +13,17 @@
 
 ## Why this exists
 
-Hosted LLM APIs throttle per *account*, and a single key is usually one strong model at roughly one request per couple of seconds. Cross that ceiling and the provider returns `429` until the window resets — but the ceiling, the window length and the reset behaviour differ per provider, per model, and change without notice.
+Hosted LLM APIs throttle per *account*: one key is usually one strong model at roughly one request every couple of seconds, and the ceiling, window and reset behaviour differ per provider, per model, and change without notice. The usual workarounds are all bad — sleep and retry, hardcode a second provider, or keep five keys in five `.env` files and forget which is exhausted.
 
-The usual workarounds are all bad: sleep and retry, hardcode a second provider, or keep five keys in five `.env` files and pick one by hand, forgetting which is exhausted.
-
-This gateway takes the keys you already have — several per provider, across several providers — and turns them into one endpoint with pooled capacity. It tracks remaining budget per `(credential, model, window)`, routes each request to a target that still has headroom, spreads load so one key is not exhausted while another idles, and fails over on `429` using the provider's own `Retry-After`.
-
-**Rate limits are never hardcoded.** They are discovered at runtime and change monthly; a numeric RPM in the source would be wrong by the end of the quarter.
+This gateway turns the keys you already own, across several providers, into one endpoint with pooled capacity: budget tracked per `(credential, model, window)`, each request routed to a target that still has headroom, load spread so no key idles while another is spent, and `429` failover on the provider's own `Retry-After`. **Rate limits are never hardcoded** — a numeric RPM in the source would be wrong by the end of the quarter.
 
 ## What this is not
 
-Stated plainly, because the distinction matters:
+- **Not an account factory.** No signup automation, identity or fingerprint rotation, or proxy layer.
+- **Not stealth.** Requests identify themselves; the gateway does not try to look like many clients.
+- **Not a licence to evade.** On `429` a credential is parked until the provider's own `retry-after`, then released — it never retries into a limit. Keys from accounts created to evade a per-account cap can breach provider terms and get banned.
 
-- **It does not create accounts.** No signup automation, no identity or fingerprint rotation, no proxy layer.
-- **It does not hide traffic.** Requests identify themselves; the gateway does not try to look like many clients.
-- **It honours provider back-off.** On `429` the credential is parked until the provider's own `retry-after`, then released. It does not retry into a limit.
-- **It is only as good as the keys you bring.** If you supply keys from accounts created to evade a per-account cap, that can breach those providers' terms and get the keys banned. Nothing here changes that.
-
-Pooling keys you legitimately control — a personal account, a work account, a second provider — is the intended use. Quota evasion is not.
+Pooling keys you legitimately control — a personal account, a work account, a second provider — is the intended use.
 
 ---
 
@@ -38,18 +31,13 @@ Pooling keys you legitimately control — a personal account, a work account, a 
 
 | Feature | Description |
 |---|---|
-| **Bring your own keys** | Per-user provider keys, encrypted at rest with AES-256-GCM. No shared operator keys, no fallback. |
-| **Multiple keys per provider** | Append a second, third, Nth key for one provider. Each becomes an independent credential with its own budget. |
+| **Bring your own keys** | Per-user keys encrypted at rest (AES-256-GCM). No shared operator keys, no fallback. |
+| **Many keys per provider** | Each appended key is an independent credential with its own budget. |
 | **Per-credential quota ledger** | One Redis key per `(credential, model, window)`; atomic reserve/reconcile/release in Lua. Refuses before dispatch, not after. |
-| **Capacity-aware routing** | Ranks candidates availability -> task fit -> least-recently-used -> quality. Availability first, because 0 RPM of a brilliant model is useless. |
-| **Automatic failover** | `429` parks the credential; `5xx`/timeout opens the breaker; the ladder moves to the next candidate. Streaming fails over only before the first token. |
-| **Streaming (SSE)** | OpenAI-compatible streaming, unbuffered through the proxy. |
-| **Per-key health** | `GET /v1/user/keys` reports each key as available or throttled, with a countdown. |
-| **Idempotency keys** | Redis lock + response cache, single-flight across streaming and non-streaming. |
-| **Accounting** | Exactly one Postgres row per terminal path — success, failure, timeout or abort — written in `finally`. |
-| **Eval harness** | 100 prompts, 4 buckets, deterministic self-graders, n=3 per cell. |
-| **Spend caps and organizations** | Per-user and per-organization budget ceilings. |
-| **Dashboard** | Next.js keys page: add, list, health and per-key delete. |
+| **Capacity-aware routing** | Ranks availability -> task fit -> LRU -> quality. Availability first: 0 RPM of a brilliant model is useless. |
+| **Failover, streaming included** | `429` parks the credential, `5xx`/timeout opens the breaker, the ladder moves on; streaming fails over only before the first token. |
+| **Idempotency + accounting** | Single-flight Redis cache across streaming and buffered paths; exactly one Postgres row per terminal path, in `finally`. |
+| **Health, caps, dashboard, evals** | Per-key health with a countdown, per-user and per-organisation budget ceilings, Next.js keys page, 100-prompt eval harness. |
 
 ---
 
@@ -88,19 +76,13 @@ client request (OpenAI wire format)
   -> reconcile usage, emit exactly one accounting row (finally)
 ```
 
-### Adding a provider
-
-One adapter file, plus one line in the registry. Nothing else changes — every CLI reads the same composition root, so a new provider reaches all of them without touching a script.
-
-```
-src/providers/types.ts       # the ProviderAdapter interface
-src/providers/defaults.ts    # the single composition root
-src/providers/<name>.ts      # your adapter
-```
-
-> Deep dive: [docs/architecture.md](docs/architecture.md) · provider notes: [docs/providers.md](docs/providers.md)
+> Deep dive: [docs/architecture.md](docs/architecture.md). Adding a provider is one adapter file plus one registry line: [docs/providers.md](docs/providers.md).
 
 ---
+
+## Prerequisites
+
+Docker Desktop (or Docker Engine + Compose) and Node.js 24 or newer.
 
 ## Quick start
 
@@ -111,6 +93,8 @@ cp .env.example .env      # then set ADMIN_TOKEN, MASTER_ENCRYPTION_KEY, JWT_SEC
 npm ci
 npm run start:all         # docker (Postgres + Redis) -> migrate -> backend :8080 + frontend :3000
 ```
+
+> This repository is private: if the clone returns `404`, ask for access or clone your own fork.
 
 Or step by step:
 
@@ -134,10 +118,6 @@ curl -X POST localhost:8080/v1/auth/register \
 
 Full walkthrough: [docs/usage-guide.md](docs/usage-guide.md)
 
-### Prerequisites
-
-Docker Desktop (or Docker Engine + Compose) and Node.js 24 or newer.
-
 ---
 
 ## Configuration
@@ -149,12 +129,12 @@ Copy `.env.example` to `.env`. **Never commit `.env`.**
 | `ADMIN_TOKEN` | yes | Admin API access |
 | `MASTER_ENCRYPTION_KEY` | yes | AES-256-GCM key for provider-key encryption (32+ chars) |
 | `JWT_SECRET` | in production | HS256 session signing, 32+ chars |
-| `DATABASE_URL` | yes | Postgres connection string (host port is **55432**, not 5432) |
+| `DATABASE_URL` | yes | Postgres connection string (host port **55432**, not 5432) |
 | `REDIS_URL` | yes | Redis connection string |
 | `PORT` | no | Gateway port, default **8080** |
 | `LOG_LEVEL` | no | `info` by default |
 
-Provider keys are **not** configured here in the BYOK path — each user submits their own through `POST /v1/user/keys`. The comma-separated `*_KEYS` variables in `.env.example` are an optional operator pool used only by the smoke and registry scripts.
+Provider keys are **not** set here in the BYOK path — each user submits their own through `POST /v1/user/keys`. The `*_KEYS` variables in `.env.example` are an optional operator pool used only by the smoke and registry scripts.
 
 ---
 
@@ -180,13 +160,13 @@ Provider keys are **not** configured here in the BYOK path — each user submits
 
 `npm run verify` runs typecheck -> lint -> format check -> tests, and must exit 0.
 
-| Gate | Result |
+| Gate | Result (2026-11-18) |
 |---|---|
 | `npm run verify` | **438 tests, 0 failures** |
 | `npm run test:int` | Integration suites (needs `docker compose up`) |
 | `cd frontend && npm run build` | Production build of the dashboard |
 
-Measured by the repo's own harnesses, with a mock upstream to isolate gateway overhead:
+Benchmarks come from the repo's own harnesses against a mock upstream, isolating gateway overhead from model latency:
 
 | Benchmark metric | Value |
 |---|---|
@@ -195,41 +175,33 @@ Measured by the repo's own harnesses, with a mock upstream to isolate gateway ov
 | p95 proxy overhead | **17.5 ms** |
 | Failover success rate | **100%** |
 
-Reproduce: `npm run load` · `npm run eval` (100 prompts, 4 buckets, n=3 — table in [docs/eval-table.md](docs/eval-table.md))
+Reproduce: `npm run load` · `npm run eval` (100 prompts, 4 buckets, n=3).
 
-> These are harness numbers against a mock upstream, not production traffic figures. The service has not been operated at scale.
+> Treat these as smoke-level evidence: the load run is **208 requests over ~12 seconds** against a 60 ms mock, not production traffic, and the service has not been operated at scale. The committed eval table ([docs/eval-table.md](docs/eval-table.md)) was produced with a mock model — rerun `npm run eval` with real keys for a meaningful quality signal.
+
+---
+
+## Status
+
+Phases A to I have landed: key aggregation, failover, accounting, evaluation, identity, the provider-key vault, user-aware routing, dashboard, multi-key pooling. Not yet: capacity-aware sharding across a provider's keys beyond LRU spread, an admin panel, an observability stack.
 
 ---
 
 ## Repository layout
 
 ```
-src/
-  core/         canonical types, errors, execute loop (imports types only - no I/O)
-  providers/    one file per provider + the registry
-  credentials/  credential pool
-  limits/       quota ledger (Redis Lua) + per-provider policy
-  resilience/   circuit breaker, credential parking, retry-after parsing
-  budget/       spend reservation
-  routing/      candidate selection, free-model resolution, eval table
-  http/         Fastify server, routes, middleware
-  models/       Postgres stores (users, provider keys, organizations)
-  telemetry/    metrics
-  eval/         eval harness
-frontend/       Next.js dashboard
-migrations/     versioned SQL
-docs/           architecture, API, providers, testing, ADRs
+src/core/         canonical types, errors, execute loop (types only - no I/O)
+src/providers/    one file per provider + the registry
+src/              credentials, limits (Lua ledger), resilience, budget, routing,
+                  http (Fastify), models (Postgres stores), telemetry, eval
+frontend/         Next.js dashboard
+migrations/       versioned SQL
+docs/             architecture, API, providers, testing, ADRs
 ```
 
-The **`core/` purity rule** is load-bearing: `core/` imports types and nothing else, which is what keeps routing testable with zero mocks — and a 438-test gate cheap enough to actually run on every change.
+The **`core/` purity rule** is load-bearing: `core/` imports types and nothing else, which keeps routing testable with zero mocks and the test gate cheap enough to run on every change.
 
 ---
-
-## Status
-
-Actively developed. Phases A to I have landed: key aggregation, failover, accounting, evaluation, user identity, the provider-key vault, user-aware routing, the dashboard, and multi-key pooling.
-
-Not yet done: capacity-aware sharding across a provider's keys beyond LRU spread, an admin panel, and a full observability stack.
 
 ## Contributing
 
