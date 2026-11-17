@@ -9,7 +9,6 @@
 ![Postgres](https://img.shields.io/badge/Postgres-16-336294)
 ![Redis](https://img.shields.io/badge/Redis-7-dc382d)
 
----
 
 ## Why this exists
 
@@ -17,7 +16,6 @@ Hosted LLM APIs throttle per *account*: one key is usually one strong model at r
 
 This gateway turns the keys you already own, across several providers, into one endpoint with pooled capacity: budget tracked per `(credential, model, window)`, each request routed to a target that still has headroom, load spread so no key idles while another is spent, and `429` failover on the provider's own `Retry-After`. **Rate limits are never hardcoded** — a numeric RPM in the source would be wrong by the end of the quarter.
 
----
 
 ## Features
 
@@ -31,7 +29,6 @@ This gateway turns the keys you already own, across several providers, into one 
 | **Idempotency + accounting** | Single-flight Redis cache across streaming and buffered paths; exactly one Postgres row per terminal path, in `finally`. |
 | **Health, caps, dashboard, evals** | Per-key health with a countdown, per-user and per-organisation budget ceilings, Next.js keys page, 100-prompt eval harness. |
 
----
 
 ## Architecture
 
@@ -70,7 +67,6 @@ client request (OpenAI wire format)
 
 > Deep dive: [docs/architecture.md](docs/architecture.md). Adding a provider is one adapter file plus one registry line: [docs/providers.md](docs/providers.md).
 
----
 
 ## Prerequisites
 
@@ -110,7 +106,6 @@ curl -X POST localhost:8080/v1/auth/register \
 
 Full walkthrough: [docs/usage-guide.md](docs/usage-guide.md)
 
----
 
 ## Configuration
 
@@ -128,7 +123,6 @@ Copy `.env.example` to `.env`. **Never commit `.env`.**
 
 Provider keys are **not** set here in the BYOK path — each user submits their own through `POST /v1/user/keys`. The `*_KEYS` variables in `.env.example` are an optional operator pool used only by the smoke and registry scripts.
 
----
 
 ## API surface
 
@@ -146,7 +140,6 @@ Provider keys are **not** set here in the BYOK path — each user submits their 
 
 > Reference: [docs/api.md](docs/api.md)
 
----
 
 ## Quality
 
@@ -171,13 +164,11 @@ Reproduce: `npm run load` · `npm run eval` (100 prompts, 4 buckets, n=3).
 
 > Treat these as smoke-level evidence: the load run is **208 requests over ~12 seconds** against a 60 ms mock, not production traffic, and the service has not been operated at scale. The committed eval table ([docs/eval-table.md](docs/eval-table.md)) was produced with a mock model — rerun `npm run eval` with real keys for a meaningful quality signal.
 
----
 
 ## Status
 
 Phases A to I have landed: key aggregation, failover, accounting, evaluation, identity, the provider-key vault, user-aware routing, dashboard, multi-key pooling. Not yet: capacity-aware sharding across a provider's keys beyond LRU spread, an admin panel, an observability stack.
 
----
 
 ## Repository layout
 
@@ -193,7 +184,6 @@ docs/             architecture, API, providers, testing, ADRs
 
 The **`core/` purity rule** is load-bearing: `core/` imports types and nothing else, which keeps routing testable with zero mocks and the test gate cheap enough to run on every change.
 
----
 
 ## Contributing
 
