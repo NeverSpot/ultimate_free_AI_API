@@ -2,6 +2,7 @@
 
 > One OpenAI-compatible endpoint in front of **a pool of provider API keys you already own**. Rate-limit-aware routing, per-credential quota ledgers, automatic failover, and multiple keys per provider.
 
+![License](https://img.shields.io/badge/License-MIT-green)
 ![Node](https://img.shields.io/badge/node-%E2%89%A524-brightgreen)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)
 ![Tests](https://img.shields.io/badge/tests-438%20passing-brightgreen)
@@ -236,4 +237,4 @@ Issues and pull requests are welcome. Run `npm run verify` before opening a PR â
 
 ## License
 
-No license file is included yet, so the default all-rights-reserved applies. Open an issue if you would like one added.
+MIT â€” see [LICENSE](LICENSE).
