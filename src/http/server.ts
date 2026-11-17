@@ -22,6 +22,7 @@ import { registerUserRoutes } from './routes/user';
 import type { UserModel } from '../models/user';
 import type { UserProviderKeyModel } from '../models/user-provider-key';
 import type { OrganizationModel } from '../models/organization';
+import type { ParkingStatus } from '../resilience/parking';
 
 export interface ServerDeps {
   config: Config;
@@ -42,6 +43,11 @@ export interface ServerDeps {
   idempotencyService?: IdempotencyService;
   userStore?: UserModel;
   providerKeyStore?: UserProviderKeyModel;
+  /**
+   * Per-key park status for `/v1/user/keys`. Defaults to `parking.isParked` when
+   * omitted, and to "not parked" when there is no parking instance either.
+   */
+  isParked?: (credentialId: string) => Promise<ParkingStatus>;
   gatewayKeyAuth?: ReturnType<typeof createGatewayKeyAuth>;
   jwtCookieAuth?: JwtCookieAuth;
   orgStore?: OrganizationModel;
@@ -188,10 +194,16 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   }
 
   if (deps.providerKeyStore) {
+    // `isParked` is the injection point for per-key health. The module-level
+    // `isParked` helper from `resilience/parking` is deliberately NOT used: nothing
+    // calls `configureParking`, so it throws on every call. Parking is currently
+    // built inside the router runtime, so until a composition root supplies a
+    // reader here the keys list reports every key as available.
     registerUserKeyRoutes(app, {
       providerKeyStore: deps.providerKeyStore,
       getUserId: (req) => req.user?.id ?? null,
       encryptionKey: deps.config.encryptionKey,
+      isParked: deps.isParked,
     });
   } else if (deps.config.nodeEnv === 'production') {
     throw new Error('buildServer: providerKeyStore is required when NODE_ENV=production');

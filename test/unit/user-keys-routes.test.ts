@@ -110,7 +110,11 @@ function makeMemoryStore(): { store: UserProviderKeyModel; rows: UserProviderKey
   return { store, rows };
 }
 
-function makeApp(store: UserProviderKeyModel, userId = 'u1'): FastifyInstance {
+function makeApp(
+  store: UserProviderKeyModel,
+  userId = 'u1',
+  isParked?: (credentialId: string) => Promise<{ parked: boolean; retryAfterMs: number }>,
+): FastifyInstance {
   return buildServer({
     config,
     provider,
@@ -118,6 +122,7 @@ function makeApp(store: UserProviderKeyModel, userId = 'u1'): FastifyInstance {
     logger: false,
     userStore: fakeUserStore(),
     providerKeyStore: store,
+    ...(isParked === undefined ? {} : { isParked }),
     jwtCookieAuth: {
       tryAuthenticate: async (req: { headers: { cookie?: string } }) =>
         req.headers.cookie === 'jwt=valid' ? { userId, username: 'alice' } : null,
@@ -288,4 +293,56 @@ test('DELETE /v1/user/keys/:provider/:keyId cannot delete another user key', asy
   });
   assert.equal(allowed.statusCode, 200, 'the owner must be able to delete their own key');
   assert.equal(rows.length, 0);
+});
+
+test('GET /v1/user/keys reports parked keys with a retry after', async (t) => {
+  const { store } = makeMemoryStore();
+  const app = makeApp(store, 'u1', async (credentialId) =>
+    credentialId === 'key-1'
+      ? { parked: true, retryAfterMs: 900_000 }
+      : { parked: false, retryAfterMs: 0 },
+  );
+  t.after(async () => {
+    await app.close();
+  });
+
+  await app.inject({
+    method: 'POST',
+    url: '/v1/user/keys',
+    headers: SESSION,
+    payload: { provider: 'openrouter', providerKey: 'sk-or-a' },
+  });
+
+  const listed = await app.inject({ method: 'GET', url: '/v1/user/keys', headers: SESSION });
+  assert.equal(listed.statusCode, 200);
+  const body = listed.json() as {
+    keys: { id: string; parked: boolean; retry_after_ms: number }[];
+  };
+  assert.equal(body.keys.length, 1);
+  assert.equal(body.keys[0]?.parked, true);
+  assert.equal(body.keys[0]?.retry_after_ms, 900_000);
+});
+
+test('GET /v1/user/keys returns 200 when no parking instance is wired', async (t) => {
+  const { store } = makeMemoryStore();
+  // No `isParked` and no `parking`: the route must degrade, not throw. This is the
+  // real deployment risk — `configureParking` has no caller, so the module-level
+  // helper always throws and must never be reached from here.
+  const app = makeApp(store);
+  t.after(async () => {
+    await app.close();
+  });
+
+  await app.inject({
+    method: 'POST',
+    url: '/v1/user/keys',
+    headers: SESSION,
+    payload: { provider: 'openrouter', providerKey: 'sk-or-a' },
+  });
+
+  const listed = await app.inject({ method: 'GET', url: '/v1/user/keys', headers: SESSION });
+  assert.equal(listed.statusCode, 200, 'a missing parking instance must not 500 the keys list');
+  const body = listed.json() as { keys: { parked: boolean; retry_after_ms: number }[] };
+  assert.equal(body.keys[0]?.parked, false);
+  assert.equal(body.keys[0]?.retry_after_ms, 0);
 });

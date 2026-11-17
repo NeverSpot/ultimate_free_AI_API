@@ -9,6 +9,7 @@ import {
   type UserProviderKey,
   type UserProviderKeyModel,
 } from '../../models/user-provider-key';
+import type { ParkingStatus } from '../../resilience/parking';
 
 const KeySummary = Type.Object({
   id: Type.String(),
@@ -17,6 +18,8 @@ const KeySummary = Type.Object({
   fingerprint: Type.String(),
   created_at: Type.String(),
   updated_at: Type.String(),
+  parked: Type.Boolean(),
+  retry_after_ms: Type.Number(),
 });
 
 type KeySummaryType = Static<typeof KeySummary>;
@@ -54,7 +57,10 @@ function requireNonEmpty(fields: Record<string, string | undefined>): void {
   }
 }
 
-function toKeySummary(key: UserProviderKey): KeySummaryType {
+/** A key with no health reading: not parked, nothing to wait for. */
+const UNPARKED: ParkingStatus = { parked: false, retryAfterMs: 0 };
+
+function toKeySummary(key: UserProviderKey, status: ParkingStatus): KeySummaryType {
   return {
     id: key.id,
     provider: key.provider,
@@ -62,6 +68,8 @@ function toKeySummary(key: UserProviderKey): KeySummaryType {
     fingerprint: key.fingerprint,
     created_at: key.created_at.toISOString(),
     updated_at: key.updated_at.toISOString(),
+    parked: status.parked,
+    retry_after_ms: status.retryAfterMs,
   };
 }
 
@@ -82,11 +90,29 @@ export function registerUserKeyRoutes(
     providerKeyStore: UserProviderKeyModel;
     getUserId: (req: FastifyRequest) => string | null;
     encryptionKey: string;
+    /**
+     * Per-credential park status. Injected rather than imported on purpose: the
+     * module-level `isParked` helper throws unless `configureParking` has run, and
+     * nothing in this codebase calls it — the real one is the injected `Parking`.
+     */
+    isParked?: (credentialId: string) => Promise<ParkingStatus>;
   },
 ): void {
   const server = app.withTypeProvider<TypeBoxTypeProvider>();
   const store = deps.providerKeyStore;
   const encryptionKey = deps.encryptionKey;
+
+  const readHealth = async (credentialId: string): Promise<ParkingStatus> => {
+    if (deps.isParked === undefined) {
+      return UNPARKED;
+    }
+    try {
+      return await deps.isParked(credentialId);
+    } catch {
+      // Health is a display field: a Redis blip must not take the keys list down.
+      return UNPARKED;
+    }
+  };
 
   server.get(
     '/v1/user/keys',
@@ -94,7 +120,10 @@ export function registerUserKeyRoutes(
     async (request, reply) => {
       const userId = requireUserId(request, deps.getUserId);
       const keys = await store.listKeys(userId);
-      return reply.status(200).send({ keys: keys.map(toKeySummary) });
+      const summaries = await Promise.all(
+        keys.map(async (key) => toKeySummary(key, await readHealth(key.id))),
+      );
+      return reply.status(200).send({ keys: summaries });
     },
   );
 
@@ -131,7 +160,8 @@ export function registerUserKeyRoutes(
         fingerprint,
       });
 
-      return reply.status(200).send(toKeySummary(key));
+      // A key that was just created cannot be parked: report it available.
+      return reply.status(200).send(toKeySummary(key, UNPARKED));
     },
   );
 
