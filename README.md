@@ -1,11 +1,11 @@
-# LLM Gateway (BYOK)
+# Ultimate Free AI Endpoint
 
 > One OpenAI-compatible endpoint in front of **a pool of provider API keys you already own** — rate-limit-aware routing, per-credential quota ledgers, automatic failover, and several keys per provider.
 
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Node](https://img.shields.io/badge/node-%E2%89%A524-brightgreen)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)
-![Tests](https://img.shields.io/badge/tests-438%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-478%20passing-brightgreen)
 ![Postgres](https://img.shields.io/badge/Postgres-16-336294)
 ![Redis](https://img.shields.io/badge/Redis-7-dc382d)
 

@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'LLM Gateway',
+  title: 'Ultimate Free AI Endpoint',
   description:
     'One API endpoint, many provider keys. Free-tier LLM access with capacity-first routing.',
 };
@@ -36,7 +36,7 @@ export default function RootLayout({
         <header className="border-b border-slate-800 bg-slate-900/60 backdrop-blur">
           <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
             <Link href="/" className="text-lg font-semibold tracking-tight text-slate-100">
-              LLM Gateway
+              Ultimate Free AI Endpoint
             </Link>
             <AuthNav />
           </div>

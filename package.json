@@ -1,5 +1,5 @@
 {
-  "name": "llm-gateway",
+  "name": "ultimate-free-ai-endpoint",
   "version": "1.0.0",
   "description": "OpenAI-compatible gateway that pools free-tier provider keys with rate-limit-aware routing and failover.",
   "main": "dist/index.js",
