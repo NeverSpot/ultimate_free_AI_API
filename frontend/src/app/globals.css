@@ -1,26 +1,31 @@
 @import 'tailwindcss';
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  /* ── Shell: dark teal ground family (replaces the slate surfaces) ───── */
+  --color-slate-950: #02090B; /* body ground, input wells, code blocks */
+  --color-slate-900: #11252A; /* panels, login card, keys card         */
+  --color-slate-800: #1D363C; /* raised controls + hairlines           */
+  --color-slate-700: #2E444A; /* control borders                       */
+  --color-slate-500: #7C8A8E; /* focus/disabled borders + faint text   */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  /* ── Ink: bone family (replaces slate 100–400 text) ─────────────────── */
+  --color-slate-400: #9AA6AA; /* muted body copy      8.04:1 on ground */
+  --color-slate-300: #AEB6B9; /* form labels          9.74:1           */
+  --color-slate-200: #C2C7C9; /* secondary text      11.76:1           */
+  --color-slate-100: #E6E6E6; /* primary ink         16.08:1           */
+
+  /* ── Accent: copper (10% of the palette) ───────────────────────────── */
+  --color-copper: #B87333;
+  --color-copper-lift: #CB8649; /* hover  */
+  --color-copper-deep: #A05D18; /* pressed */
+  --color-ink: #16110C;         /* text ON copper — 4.95:1 */
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-slate-950);
+  color: var(--color-slate-100);
   font-family: Arial, Helvetica, sans-serif;
 }
