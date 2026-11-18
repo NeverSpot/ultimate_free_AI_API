@@ -23,7 +23,7 @@ const STEPS = [
   },
   {
     title: 'Reserve headroom',
-    body: 'A Redis Lua script checks RPM, RPD and TPM and decrements in one round-trip, so two requests can never claim the same capacity.',
+    body: 'It checks your per-minute, per-day and per-token limits and counts the request in the same step, so two requests can never claim the same capacity.',
   },
   {
     title: 'Fail over early',
