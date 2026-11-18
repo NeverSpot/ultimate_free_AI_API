@@ -14,7 +14,7 @@ export function AuthNav() {
   if (!user) {
     return (
       <nav className="flex items-center gap-4 text-sm text-slate-300">
-        <Link href="/login" className="hover:text-slate-100">
+        <Link href="/login" className="transition hover:text-copper-lift">
           Login
         </Link>
       </nav>
@@ -23,7 +23,7 @@ export function AuthNav() {
 
   return (
     <nav className="flex items-center gap-4 text-sm text-slate-300">
-      <Link href="/keys" className="hover:text-slate-100">
+      <Link href="/keys" className="transition hover:text-copper-lift">
         Keys
       </Link>
       <button
@@ -44,7 +44,7 @@ export function AuthNav() {
           router.push('/login');
           router.refresh();
         }}
-        className="hover:text-slate-100"
+        className="transition hover:text-copper-lift"
       >
         Sign out
       </button>

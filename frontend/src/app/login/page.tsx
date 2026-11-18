@@ -283,7 +283,7 @@ function LoginPageInner() {
 
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-20">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+      <div className="w-full max-w-md rounded-2xl border border-copper/25 bg-slate-900 p-6 shadow-xl">
         {/* Tabs */}
         <div className="mb-6 flex border-b border-slate-800">
           <button
@@ -295,8 +295,8 @@ function LoginPageInner() {
             }}
             className={`flex-1 pb-3 text-center text-sm font-medium transition ${
               tab === 'signin'
-                ? 'border-b-2 border-slate-100 text-slate-100'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'border-b-2 border-copper text-slate-100'
+                : 'text-slate-400 hover:text-copper-lift'
             }`}
           >
             Sign In
@@ -309,8 +309,8 @@ function LoginPageInner() {
             }}
             className={`flex-1 pb-3 text-center text-sm font-medium transition ${
               tab === 'register'
-                ? 'border-b-2 border-slate-100 text-slate-100'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'border-b-2 border-copper text-slate-100'
+                : 'text-slate-400 hover:text-copper-lift'
             }`}
           >
             Create Account
@@ -323,7 +323,7 @@ function LoginPageInner() {
               <button
                 type="button"
                 onClick={() => startOAuth('google')}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500"
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-copper/60"
               >
                 <GoogleIcon />
                 Continue with Google
@@ -333,7 +333,7 @@ function LoginPageInner() {
               <button
                 type="button"
                 onClick={() => startOAuth('github')}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500"
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-copper/60"
               >
                 <GitHubIcon />
                 Continue with GitHub
@@ -447,7 +447,7 @@ function LoginPageInner() {
                     setRegisterStep('details');
                     setError('');
                   }}
-                  className="text-slate-400 hover:text-slate-200"
+                  className="text-slate-400 hover:text-copper-lift"
                 >
                   Use a different email
                 </button>
@@ -455,7 +455,7 @@ function LoginPageInner() {
                   type="button"
                   onClick={onResend}
                   disabled={resendIn > 0 || loading}
-                  className="text-slate-400 hover:text-slate-200 disabled:opacity-50"
+                  className="text-slate-400 hover:text-copper-lift disabled:opacity-50"
                 >
                   {resendIn > 0 ? `Resend code in ${resendIn}s` : 'Resend code'}
                 </button>
@@ -478,7 +478,7 @@ function LoginPageInner() {
                   This is your gateway API key. You can view it any time on the Keys page.
                 </p>
                 <div className="mt-3 flex items-center gap-2">
-                  <code className="flex-1 break-all rounded border border-slate-800 bg-slate-950 p-2 text-xs text-slate-200">
+                  <code className="flex-1 break-all rounded border border-copper/25 bg-slate-950 p-2 text-xs text-slate-200">
                     {registeredKey}
                   </code>
                   <button
