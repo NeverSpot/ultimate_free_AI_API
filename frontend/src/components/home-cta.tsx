@@ -27,7 +27,7 @@ export function HomeCta() {
       <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
         <Link
           href="/keys"
-          className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-6 py-3 text-base font-semibold text-slate-950 transition hover:bg-white shadow-lg shadow-white/5"
+          className="inline-flex items-center gap-2 rounded-xl bg-copper px-6 py-3 text-base font-semibold text-ink transition hover:bg-copper-lift shadow-lg shadow-black/20"
         >
           Go to Dashboard
         </Link>
@@ -39,7 +39,7 @@ export function HomeCta() {
     <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
       <Link
         href="/login?tab=register"
-        className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-6 py-3 text-base font-semibold text-slate-950 transition hover:bg-white shadow-lg shadow-white/5"
+        className="inline-flex items-center gap-2 rounded-xl bg-copper px-6 py-3 text-base font-semibold text-ink transition hover:bg-copper-lift shadow-lg shadow-black/20"
       >
         Create Account
       </Link>

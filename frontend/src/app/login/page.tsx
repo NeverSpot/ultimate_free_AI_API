@@ -390,7 +390,7 @@ function LoginPageInner() {
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-2 rounded-lg bg-slate-100 px-4 py-2 font-medium text-slate-900 transition hover:bg-white disabled:opacity-60"
+                className="mt-2 rounded-lg bg-copper px-4 py-2 font-medium text-ink transition hover:bg-copper-lift disabled:opacity-60"
               >
                 {loading ? 'Signing in...' : 'Sign In'}
               </button>
@@ -435,7 +435,7 @@ function LoginPageInner() {
               <button
                 type="submit"
                 disabled={loading}
-                className="rounded-lg bg-slate-100 px-4 py-2 font-medium text-slate-900 transition hover:bg-white disabled:opacity-60"
+                className="rounded-lg bg-copper px-4 py-2 font-medium text-ink transition hover:bg-copper-lift disabled:opacity-60"
               >
                 {loading ? 'Verifying...' : 'Verify and create account'}
               </button>
@@ -545,7 +545,7 @@ function LoginPageInner() {
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-2 rounded-lg bg-slate-100 px-4 py-2 font-medium text-slate-900 transition hover:bg-white disabled:opacity-60"
+                className="mt-2 rounded-lg bg-copper px-4 py-2 font-medium text-ink transition hover:bg-copper-lift disabled:opacity-60"
               >
                 {loading ? 'Sending code...' : 'Create Account'}
               </button>
