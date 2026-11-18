@@ -301,6 +301,7 @@ export default function KeysPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-10">
       <div className="mb-6">
+        <p className="mb-1 text-xs font-medium uppercase tracking-wider text-copper">Gateway access</p>
         <h1 className="text-2xl font-semibold text-slate-100">Your gateway key</h1>
         <p className="mt-1 text-sm text-slate-400">
           Signed in as <span className="text-slate-200">{user?.username ?? '…'}</span>
@@ -314,12 +315,12 @@ export default function KeysPage() {
       )}
 
       {/* Gateway key banner/box */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg">
+      <div className="rounded-2xl border border-copper/25 bg-slate-900 p-5 shadow-lg">
         <div className="mb-2 text-xs font-medium uppercase tracking-wider text-slate-400">
           Personal Gateway API Key
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <code className="break-all rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm font-mono text-slate-200">
+          <code className="break-all rounded-lg border border-copper/25 bg-slate-950 px-3 py-2 text-sm font-mono text-slate-200">
             {gatewayKey ?? '…'}
           </code>
           <div className="flex gap-2">
@@ -336,7 +337,7 @@ export default function KeysPage() {
                 setRegenPassword('');
                 setShowRegenModal(true);
               }}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-100 hover:bg-slate-700"
+              className="inline-flex items-center gap-2 rounded-lg bg-copper px-3 py-2 text-sm font-medium text-ink transition hover:bg-copper-lift"
             >
               <RefreshCw size={16} />
               Get New
@@ -375,7 +376,7 @@ export default function KeysPage() {
       )}
 
       {/* Provider Keys table */}
-      <div className="mt-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+      <div className="mt-8 overflow-hidden rounded-2xl border border-copper/20 bg-slate-900">
         <div className="border-b border-slate-800 px-5 py-4">
           <h2 className="text-lg font-semibold text-slate-100">Provider keys</h2>
           <p className="mt-1 text-sm text-slate-400">
@@ -392,7 +393,7 @@ export default function KeysPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
-              <thead className="text-left text-slate-400 border-b border-slate-800">
+              <thead className="text-left text-slate-400 border-b border-copper/25">
                 <tr>
                   <th className="px-5 py-3 font-medium">Provider</th>
                   <th className="px-5 py-3 font-medium">Key</th>
@@ -417,13 +418,13 @@ export default function KeysPage() {
                             {providerKeys.map((key) => (
                               <li
                                 key={key.id}
-                                className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
+                                className="flex items-center justify-between gap-3 rounded-lg border border-copper/35 border-l-2 border-l-copper bg-copper/10 px-3 py-2 transition hover:border-copper/60"
                               >
                                 <div className="min-w-0">
-                                  <p className="truncate text-xs font-medium text-slate-200">
+                                  <p className="truncate text-xs font-medium text-copper-lift">
                                     {key.label}
                                   </p>
-                                  <p className="truncate font-mono text-[0.65rem] text-slate-500">
+                                  <p className="truncate font-mono text-[0.65rem] text-slate-400">
                                     {key.fingerprint.slice(0, 16)}
                                   </p>
                                 </div>
@@ -502,7 +503,7 @@ export default function KeysPage() {
                             type="button"
                             onClick={() => submitProviderKey(provider.id)}
                             disabled={isOperating || !currentValue.trim() || !user}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-slate-700 disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-100 transition hover:border-copper/50 hover:bg-slate-700 disabled:opacity-50"
                           >
                             {isOperating && <Loader2 className="animate-spin" size={14} />}
                             Add key
@@ -520,7 +521,7 @@ export default function KeysPage() {
                                   [provider.id]: '',
                                 }));
                               }}
-                              className="rounded-lg border border-slate-700 px-2.5 py-2 text-xs text-slate-400 hover:bg-slate-800"
+                              className="rounded-lg border border-slate-700 px-2.5 py-2 text-xs text-slate-400 transition hover:border-copper/40 hover:bg-slate-800"
                             >
                               Cancel
                             </button>
@@ -539,7 +540,7 @@ export default function KeysPage() {
       {/* Password confirmation dialog for key regeneration */}
       {showRegenModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+          <div className="w-full max-w-md rounded-2xl border border-copper/25 bg-slate-900 p-6 shadow-2xl">
             <h3 className="text-lg font-semibold text-slate-100">Regenerate Gateway API Key</h3>
             <p className="mt-2 text-sm text-slate-400">
               Generating a new gateway API key will immediately invalidate your existing key. Please
@@ -574,7 +575,7 @@ export default function KeysPage() {
                     setRegenError('');
                   }}
                   disabled={regenLoading}
-                  className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+                  className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-copper/40 hover:bg-slate-800 disabled:opacity-50"
                 >
                   Cancel
                 </button>

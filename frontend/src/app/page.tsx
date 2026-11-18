@@ -4,7 +4,7 @@ import { HomeCta } from '@/components/home-cta';
 export default function Home() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-20 text-center">
-      <div className="inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900/80 px-4 py-1.5 text-xs font-medium text-slate-300">
+      <div className="inline-flex items-center gap-2 rounded-full border border-copper/40 bg-slate-900/80 px-4 py-1.5 text-xs font-medium text-slate-300">
         <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
         OpenAI-Compatible Free-Tier Gateway
       </div>
@@ -12,7 +12,7 @@ export default function Home() {
       <h1 className="mt-8 max-w-3xl text-5xl font-bold tracking-tight text-slate-100 sm:text-6xl">
         Many free models.
         <br />
-        <span className="text-slate-400">One API key.</span>
+        <span className="text-copper">One API key.</span>
       </h1>
 
       <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-400">
@@ -26,8 +26,8 @@ export default function Home() {
 
       {/* Value Prop Highlights */}
       <div className="mt-20 grid max-w-4xl grid-cols-1 gap-6 sm:grid-cols-3 text-left">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur">
-          <div className="mb-4 inline-flex rounded-lg border border-slate-800 bg-slate-950 p-3 text-slate-200">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur transition hover:border-copper/40">
+          <div className="mb-4 inline-flex rounded-lg border border-copper/30 bg-copper/10 p-3 text-copper-lift">
             <KeyRound size={20} />
           </div>
           <h3 className="text-base font-semibold text-slate-100">Bring Your Own Keys</h3>
@@ -36,8 +36,8 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur">
-          <div className="mb-4 inline-flex rounded-lg border border-slate-800 bg-slate-950 p-3 text-slate-200">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur transition hover:border-copper/40">
+          <div className="mb-4 inline-flex rounded-lg border border-copper/30 bg-copper/10 p-3 text-copper-lift">
             <Zap size={20} />
           </div>
           <h3 className="text-base font-semibold text-slate-100">Capacity-First Routing</h3>
@@ -46,8 +46,8 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur">
-          <div className="mb-4 inline-flex rounded-lg border border-slate-800 bg-slate-950 p-3 text-slate-200">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur transition hover:border-copper/40">
+          <div className="mb-4 inline-flex rounded-lg border border-copper/30 bg-copper/10 p-3 text-copper-lift">
             <ShieldCheck size={20} />
           </div>
           <h3 className="text-base font-semibold text-slate-100">Automatic Failover</h3>

@@ -33,9 +33,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-slate-950 text-slate-100">
-        <header className="border-b border-slate-800 bg-slate-900/60 backdrop-blur">
+        <header className="border-t-2 border-t-copper border-b border-slate-800 bg-slate-900/60 backdrop-blur">
           <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-            <Link href="/" className="text-lg font-semibold tracking-tight text-slate-100">
+            <Link href="/" className="inline-flex items-center gap-2 text-lg font-semibold tracking-tight text-slate-100 transition hover:text-copper-lift">
+              <span className="h-2 w-2 rounded-sm bg-copper" aria-hidden />
               Ultimate Free AI Endpoint
             </Link>
             <AuthNav />

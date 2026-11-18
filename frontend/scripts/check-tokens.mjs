@@ -42,6 +42,8 @@ const checks = [
   ['copper accent on ground',          tok.copper,        ground,           4.5],
   ['copper accent on raised',          tok.copper,        raised,           3.0],
   ['copper hover on ground',           tok['copper-lift'], ground,          4.5],
+  ['copper ink on panel (copper-lift)', tok['copper-lift'], tok['slate-900'], 4.5],
+  ['copper accent on panel (large/UI)', tok.copper,          tok['slate-900'], 3.0],
 ];
 
 let failed = 0;
