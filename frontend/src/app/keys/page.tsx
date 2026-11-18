@@ -479,7 +479,7 @@ export default function KeysPage() {
                                 [provider.id]: e.target.value,
                               }))
                             }
-                            className="w-full min-w-[200px] rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-slate-500"
+                            className="w-full min-w-[200px] rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-copper"
                             autoComplete="off"
                           />
                         </form>
@@ -557,7 +557,7 @@ export default function KeysPage() {
                   required
                   value={regenPassword}
                   onChange={(e) => setRegenPassword(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-slate-500"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-copper"
                   autoComplete="current-password"
                   autoFocus
                 />

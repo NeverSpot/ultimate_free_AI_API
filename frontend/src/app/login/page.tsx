@@ -365,7 +365,7 @@ function LoginPageInner() {
                   required
                   value={signInUsername}
                   onChange={(e) => setSignInUsername(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-slate-500"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-copper"
                   autoComplete="username"
                 />
               </div>
@@ -380,7 +380,7 @@ function LoginPageInner() {
                   required
                   value={signInPassword}
                   onChange={(e) => setSignInPassword(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-slate-500"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-copper"
                   autoComplete="current-password"
                 />
               </div>
@@ -425,7 +425,7 @@ function LoginPageInner() {
                   required
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-center font-mono text-xl tracking-[0.5em] text-slate-100 outline-none focus:border-slate-500"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-center font-mono text-xl tracking-[0.5em] text-slate-100 outline-none focus:border-copper"
                   placeholder="000000"
                 />
               </div>
@@ -504,7 +504,7 @@ function LoginPageInner() {
                   required
                   value={registerUsername}
                   onChange={(e) => setRegisterUsername(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-slate-500"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-copper"
                   autoComplete="username"
                 />
               </div>
@@ -519,7 +519,7 @@ function LoginPageInner() {
                   required
                   value={registerEmail}
                   onChange={(e) => setRegisterEmail(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-slate-500"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-copper"
                   autoComplete="email"
                 />
               </div>
@@ -535,7 +535,7 @@ function LoginPageInner() {
                   minLength={8}
                   value={registerPassword}
                   onChange={(e) => setRegisterPassword(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-slate-500"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-copper"
                   autoComplete="new-password"
                 />
               </div>
