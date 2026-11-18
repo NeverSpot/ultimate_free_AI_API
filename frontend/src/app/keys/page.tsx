@@ -418,13 +418,13 @@ export default function KeysPage() {
                             {providerKeys.map((key) => (
                               <li
                                 key={key.id}
-                                className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
+                                className="flex items-center justify-between gap-3 rounded-lg border border-copper/35 border-l-2 border-l-copper bg-copper/10 px-3 py-2 transition hover:border-copper/60"
                               >
                                 <div className="min-w-0">
-                                  <p className="truncate text-xs font-medium text-slate-200">
+                                  <p className="truncate text-xs font-medium text-copper-lift">
                                     {key.label}
                                   </p>
-                                  <p className="truncate font-mono text-[0.65rem] text-slate-500">
+                                  <p className="truncate font-mono text-[0.65rem] text-slate-400">
                                     {key.fingerprint.slice(0, 16)}
                                   </p>
                                 </div>
