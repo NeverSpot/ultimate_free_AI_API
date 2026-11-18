@@ -27,7 +27,7 @@ const STEPS = [
   },
   {
     title: 'Fail over early',
-    body: 'A 429 or an open breaker hands the request to the next provider. After the first streamed token it stops instead of retrying.',
+    body: 'A rate limit or a provider that keeps failing hands the request to the next one. After the first streamed token it stops instead of retrying.',
   },
 ] as const;
 
@@ -48,7 +48,8 @@ export default function Home() {
           <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-slate-400">
             Free-tier keys are capped per provider. This gateway pools the free models from
             OpenRouter, NVIDIA NIM and TokenHarbor behind a single OpenAI-compatible endpoint — so
-            a request that would 429 on one provider is routed to another that still has capacity.
+            a request that hits a rate limit on one provider is routed to another that still has
+            capacity.
           </p>
 
           <HomeCta />
