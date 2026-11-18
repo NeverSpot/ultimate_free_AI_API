@@ -147,3 +147,75 @@ daily window (`limit: 50`), not a per-minute one — reinforcing the multi-windo
 requirement from the Token Harbor finding. Block 6 should poll `/auth/key` for OpenRouter
 rather than inferring limits from 429s. Note `rate_limit.requests: -1` is deprecated and must
 be ignored, not parsed as a zero limit.
+
+---
+
+## Free-tier expansion — 16 providers added (2026-11-19)
+
+The catalog now lives in `src/providers/catalog.ts`; it is the single row-per-provider table
+that `providers/defaults.ts` (adapters), `credentials/pool.ts` (env vars) and
+`GET /v1/providers` (keys screen) all read. Adding a provider is one row plus, only when the
+provider does not speak the OpenAI dialect, one adapter file.
+
+**Base URLs below are taken from vendor documentation, not from a live probe.** The three
+original providers were verified against real keys; these sixteen were not, because none of
+them has a key in this repository. Treat every endpoint as *documented, not observed*, and
+the first real call as the test.
+
+### Recurring free allowances — pooled by default
+
+| Provider | Env var | Base URL | Free signal |
+|---|---|---|---|
+| Groq | `GROQ_KEYS` | `https://api.groq.com/openai/v1` | whole catalog (`freeRule: all`) |
+| Cerebras | `CEREBRAS_KEYS` | `https://api.cerebras.ai/v1` | whole catalog |
+| SambaNova | `SAMBANOVA_KEYS` | `https://api.sambanova.ai/v1` | whole catalog |
+| Z.ai (Zhipu) | `ZAI_KEYS` | `https://api.z.ai/api/paas/v4` | model id contains `flash` |
+| Mistral AI | `MISTRAL_KEYS` | `https://api.mistral.ai/v1` | whole catalog |
+| Google AI Studio | `GOOGLE_AI_KEYS` | `https://generativelanguage.googleapis.com/v1beta/openai` | id prefix allowlist (Gemini Flash, Gemma) |
+| Cloudflare Workers AI | `CLOUDFLARE_AI_KEYS` + `CLOUDFLARE_ACCOUNT_ID` | `https://api.cloudflare.com/client/v4/accounts/{id}/ai/v1` | whole catalog (Neurons/day) |
+| Cohere | `COHERE_KEYS` | `https://api.cohere.ai/compatibility/v1` | whole catalog (trial key) |
+| AIML API | `AIMLAPI_KEYS` | `https://api.aimlapi.com/v1` | **none** — `is_free: null`, never auto-routed |
+
+`all` means "this provider meters an allowance rather than a per-token price, so every model
+it lists is reachable inside that allowance". It is still evidence from the catalog (`is_free`
+is set by the adapter, not by marketing copy), but it is coarser than OpenRouter's zero-pricing
+rule: a provider that later adds paid models without a marker would be mis-read.
+
+### Finite signup credit — off unless `ENABLE_CREDIT_PROVIDERS=1`
+
+| Provider | Env var | Base URL |
+|---|---|---|
+| Together AI | `TOGETHER_KEYS` | `https://api.together.xyz/v1` |
+| Fireworks AI | `FIREWORKS_KEYS` | `https://api.fireworks.ai/inference/v1` |
+| DeepInfra | `DEEPINFRA_KEYS` | `https://api.deepinfra.com/v1/openai` |
+| Novita AI | `NOVITA_KEYS` | `https://api.novita.ai/openai` |
+| Hyperbolic | `HYPERBOLIC_KEYS` | `https://api.hyperbolic.xyz/v1` |
+| Hugging Face | `HUGGINGFACE_KEYS` | `https://router.huggingface.co/v1` |
+| Replicate | `REPLICATE_KEYS` | `https://api.replicate.com/v1` (own adapter) |
+
+Two mechanisms keep a finite balance from being silently spent:
+
+1. The env var is ignored and no adapter is built unless the operator sets
+   `ENABLE_CREDIT_PROVIDERS=1`.
+2. `402` is in these providers' `authStatuses`, so an empty balance retires the credential and
+   fails over instead of backing off and retrying a key that can never work again.
+
+Replicate does not speak `/chat/completions`: `ReplicateAdapter` posts to
+`/models/{owner}/{name}/predictions` with `Prefer: wait=60`, joins the canonical messages into
+one `prompt` plus `system_prompt`, and reports usage as `estimated` because the response has no
+token counts. A model whose input schema is not text-in/text-out returns 422 — an honest
+failure rather than a wrong answer.
+
+### Known gaps to close with real keys
+
+- **Google's free allowlist is configuration, not evidence.** It cannot be read from
+  `/models`, so it will rot. Re-check it against the pricing page when models change.
+- **`/models` on the OpenAI-compatible Gemini endpoint is unverified**; if it 404s, discovery
+  reports a failure for `google` and routing falls back to explicitly named models.
+- **Cloudflare encodes the account id in the path**, so one host supports one account. With no
+  `CLOUDFLARE_ACCOUNT_ID` the adapter fails with an auth error naming the variable, rather than
+  calling `.../accounts//ai/v1`.
+- **Cohere's compatibility endpoint** covers chat but not every Cohere parameter; tool calling
+  is not mapped.
+- Mistral's free plan and Z.ai's Flash-only free tier are both documented per-model and can
+  change without a version bump.

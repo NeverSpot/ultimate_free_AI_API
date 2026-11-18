@@ -38,6 +38,10 @@ COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/dist         ./dist
 COPY --from=builder --chown=node:node /app/package.json ./
 
+# `node dist/db/migrate.js` resolves migrations as <cwd>/migrations, so the SQL
+# files must ride along; without them the one-shot migrate service dies on ENOENT.
+COPY --from=builder --chown=node:node /app/migrations   ./migrations
+
 EXPOSE 8080
 
 # Healthcheck — orchestrators detect dead app, not just dead container

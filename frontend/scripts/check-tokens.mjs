@@ -13,13 +13,25 @@ for (const m of css.matchAll(/--color-([a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})/g)) {
   tok[m[1]] = m[2];
 }
 
-const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
-const lin = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
-const lum = h => { const [r, g, b] = rgb(h); return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b); };
-const cr = (a, b) => { const A = lum(a), B = lum(b), hi = Math.max(A, B), lo = Math.min(A, B); return (hi + 0.05) / (lo + 0.05); };
+const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const lin = (c) => {
+  c /= 255;
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+};
+const lum = (h) => {
+  const [r, g, b] = rgb(h);
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+};
+const cr = (a, b) => {
+  const A = lum(a),
+    B = lum(b),
+    hi = Math.max(A, B),
+    lo = Math.min(A, B);
+  return (hi + 0.05) / (lo + 0.05);
+};
 
 const required = ['950', '900', '800', '700', '500', '400', '300', '200', '100'];
-const missing = required.filter(n => !tok['slate-' + n]).map(n => '--color-slate-' + n);
+const missing = required.filter((n) => !tok['slate-' + n]).map((n) => '--color-slate-' + n);
 for (const n of ['copper', 'copper-lift', 'copper-deep', 'ink']) {
   if (!tok[n]) missing.push('--color-' + n);
 }
@@ -38,12 +50,12 @@ const checks = [
   ['labels       slate-300 on ground', tok['slate-300'], ground, 4.5],
   ['muted body   slate-400 on ground', tok['slate-400'], ground, 4.5],
   ['faint        slate-500 on ground', tok['slate-500'], ground, 4.5],
-  ['button label ink on copper',       tok.ink,           tok.copper,       4.5],
-  ['copper accent on ground',          tok.copper,        ground,           4.5],
-  ['copper accent on raised',          tok.copper,        raised,           3.0],
-  ['copper hover on ground',           tok['copper-lift'], ground,          4.5],
+  ['button label ink on copper', tok.ink, tok.copper, 4.5],
+  ['copper accent on ground', tok.copper, ground, 4.5],
+  ['copper accent on raised', tok.copper, raised, 3.0],
+  ['copper hover on ground', tok['copper-lift'], ground, 4.5],
   ['copper ink on panel (copper-lift)', tok['copper-lift'], tok['slate-900'], 4.5],
-  ['copper accent on panel (large/UI)', tok.copper,          tok['slate-900'], 3.0],
+  ['copper accent on panel (large/UI)', tok.copper, tok['slate-900'], 3.0],
 ];
 
 let failed = 0;
@@ -55,7 +67,9 @@ for (const [label, fg, bg, min] of checks) {
 }
 
 if (/prefers-color-scheme/.test(css)) {
-  console.error('FAIL — globals.css still contains a prefers-color-scheme block; it must be deleted.');
+  console.error(
+    'FAIL — globals.css still contains a prefers-color-scheme block; it must be deleted.',
+  );
   failed++;
 }
 if (css.includes('--color-background') || css.includes('--color-foreground')) {

@@ -31,6 +31,17 @@ const DEFAULT_POLICIES: Readonly<Record<string, LimitPolicy>> = {
   nvidia: { observable: 'inferred' },
   openrouter: { rpd: null, observable: 'quota-endpoint' },
   tokenharbor: { rpw: null, observable: 'inferred' },
+  // Allowance-based free tiers: the window is known, the ceiling is published per model
+  // and can change without notice, so it stays `null` until the ledger learns it.
+  groq: { rpm: null, rpd: null, observable: 'inferred' },
+  cerebras: { rpm: null, rpd: null, observable: 'inferred' },
+  sambanova: { rpm: null, rpd: null, observable: 'inferred' },
+  zai: { rpd: null, observable: 'inferred' },
+  mistral: { rpm: null, rpd: null, observable: 'inferred' },
+  google: { rpm: null, rpd: null, observable: 'inferred' },
+  cloudflare: { rpd: null, observable: 'inferred' },
+  cohere: { rpm: null, rpd: null, observable: 'inferred' },
+  // Credit-backed providers have no recurring window at all: leave them on the default.
 };
 
 const WINDOW_ORDER: readonly Window[] = ['rpm', 'rpd', 'rpw'];

@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState, useSyncExternalStore } from 'react';
+import { FormEvent, Fragment, useEffect, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, Copy, X, Trash2, RefreshCw, Loader2 } from 'lucide-react';
 import {
@@ -8,26 +8,74 @@ import {
   type GatewayKeyResponse,
   type KeySummary,
   type ListKeysResponse,
+  type ProviderInfo,
   type RegenerateKeyResponse,
 } from '@/lib/api';
 import { useSession } from '@/hooks/use-session';
 
-type ProviderId = 'openrouter' | 'nvidia-nim' | 'tokenharbor';
-
+/**
+ * One row on the keys screen.
+ *
+ * The list itself comes from `GET /v1/providers`: the backend catalog is the single
+ * source of truth for which providers exist, so adding one there must not require a
+ * frontend deploy. Only the three original providers are duplicated here, so the screen
+ * still renders something when the gateway is older than this build.
+ */
 interface ProviderDef {
-  id: ProviderId;
+  id: string;
   name: string;
+  tier: 'free' | 'credit';
+  freeNote: string;
+  signupUrl: string;
+  requiresEnv: string | null;
+  aliases: string[];
 }
 
-const PROVIDERS: ProviderDef[] = [
-  { id: 'openrouter', name: 'OpenRouter' },
-  { id: 'nvidia-nim', name: 'NVIDIA NIM' },
-  { id: 'tokenharbor', name: 'TokenHarbor' },
+const FALLBACK_PROVIDERS: ProviderDef[] = [
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    tier: 'free',
+    freeNote: ':free models — 50 requests/day.',
+    signupUrl: 'https://openrouter.ai',
+    requiresEnv: null,
+    aliases: [],
+  },
+  {
+    id: 'nvidia',
+    name: 'NVIDIA NIM',
+    tier: 'free',
+    freeNote: 'Credit-based developer access.',
+    signupUrl: 'https://build.nvidia.com',
+    requiresEnv: null,
+    aliases: ['nvidia-nim'],
+  },
+  {
+    id: 'tokenharbor',
+    name: 'Token Harbor',
+    tier: 'free',
+    freeNote: 'Four :free models on a weekly allowance.',
+    signupUrl: 'https://tokenharbor.ai',
+    requiresEnv: null,
+    aliases: [],
+  },
 ];
 
-function getProviderName(id: ProviderId): string {
-  const p = PROVIDERS.find((item) => item.id === id);
-  return p ? p.name : id;
+function toProviderDef(info: ProviderInfo): ProviderDef {
+  return {
+    id: info.id,
+    name: info.name,
+    tier: info.tier === 'credit' ? 'credit' : 'free',
+    freeNote: info.free_note,
+    signupUrl: info.signup_url,
+    requiresEnv: info.requires_env,
+    aliases: info.aliases ?? [],
+  };
+}
+
+/** True when a stored key row belongs to this provider, including its old spellings. */
+function ownsProvider(provider: ProviderDef, keyProvider: string): boolean {
+  return keyProvider === provider.id || provider.aliases.includes(keyProvider);
 }
 
 /** A park duration as something a person can read at a glance. */
@@ -80,33 +128,18 @@ export default function KeysPage() {
     getServerSnapshot,
   );
 
-  const [fingerprints, setFingerprints] = useState<Record<ProviderId, string>>({
-    openrouter: '',
-    'nvidia-nim': '',
-    tokenharbor: '',
-  });
+  // The provider catalog, painted from the backend so a new provider needs no deploy here.
+  const [providers, setProviders] = useState<ProviderDef[]>(FALLBACK_PROVIDERS);
 
-  // Every key the user has registered. A provider may hold several, so this list —
-  // not the single-fingerprint map above — is what the table renders.
+  // Every key the user has registered. A provider may hold several, so this list is
+  // what the table renders.
   const [keys, setKeys] = useState<KeySummary[]>([]);
 
-  const [values, setValues] = useState<Record<ProviderId, string>>({
-    openrouter: '',
-    'nvidia-nim': '',
-    tokenharbor: '',
-  });
+  const [values, setValues] = useState<Record<string, string>>({});
 
-  const [editMode, setEditMode] = useState<Record<ProviderId, boolean>>({
-    openrouter: false,
-    'nvidia-nim': false,
-    tokenharbor: false,
-  });
+  const [editMode, setEditMode] = useState<Record<string, boolean>>({});
 
-  const [operationLoading, setOperationLoading] = useState<Record<ProviderId, boolean>>({
-    openrouter: false,
-    'nvidia-nim': false,
-    tokenharbor: false,
-  });
+  const [operationLoading, setOperationLoading] = useState<Record<string, boolean>>({});
 
   const [loadingKeys, setLoadingKeys] = useState(true);
   const [keyRestoreDone, setKeyRestoreDone] = useState(false);
@@ -156,19 +189,7 @@ export default function KeysPage() {
       .get<ListKeysResponse>('/user/keys')
       .then((res) => {
         if (cancelled) return;
-        const list = Array.isArray(res?.keys) ? res.keys : [];
-        setKeys(list);
-        const map: Record<ProviderId, string> = {
-          openrouter: '',
-          'nvidia-nim': '',
-          tokenharbor: '',
-        };
-        for (const item of list) {
-          if (item.provider in map && item.fingerprint) {
-            map[item.provider as ProviderId] = item.fingerprint;
-          }
-        }
-        setFingerprints(map);
+        setKeys(Array.isArray(res?.keys) ? res.keys : []);
         setError('');
       })
       .catch((err: unknown) => {
@@ -183,6 +204,30 @@ export default function KeysPage() {
       cancelled = true;
     };
   }, [sessionLoading, sessionError, user, router]);
+
+  // The catalog is public data about the gateway, not about this user, so it is fetched
+  // once. A failure keeps the fallback rows instead of blocking the page: the keys a user
+  // already stored must stay deletable even when discovery is down.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get<{ providers?: ProviderInfo[] }>('/providers')
+      .then((res) => {
+        if (cancelled) return;
+        const list = Array.isArray(res?.providers) ? res.providers.map(toProviderDef) : [];
+        if (list.length > 0) setProviders(list);
+      })
+      .catch(() => {
+        /* keep the fallback rows */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function providerName(id: string): string {
+    return providers.find((provider) => ownsProvider(provider, id))?.name ?? id;
+  }
 
   async function copyGatewayKey() {
     if (!gatewayKey) return;
@@ -229,22 +274,10 @@ export default function KeysPage() {
   /** Re-read the key list. The server is the source of truth for what exists. */
   async function refreshKeys(): Promise<void> {
     const res = await api.get<ListKeysResponse>('/user/keys');
-    const list = Array.isArray(res?.keys) ? res.keys : [];
-    setKeys(list);
-    const map: Record<ProviderId, string> = {
-      openrouter: '',
-      'nvidia-nim': '',
-      tokenharbor: '',
-    };
-    for (const item of list) {
-      if (item.provider in map && item.fingerprint) {
-        map[item.provider as ProviderId] = item.fingerprint;
-      }
-    }
-    setFingerprints(map);
+    setKeys(Array.isArray(res?.keys) ? res.keys : []);
   }
 
-  async function submitProviderKey(provider: ProviderId) {
+  async function submitProviderKey(provider: string) {
     if (!user) {
       setError('Please log in to manage provider keys');
       return;
@@ -268,7 +301,7 @@ export default function KeysPage() {
       await refreshKeys();
       setValues((s) => ({ ...s, [provider]: '' }));
       setEditMode((s) => ({ ...s, [provider]: false }));
-      setSuccess(`${getProviderName(provider)} key saved successfully`);
+      setSuccess(`${providerName(provider)} key saved successfully`);
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save key');
@@ -277,7 +310,7 @@ export default function KeysPage() {
     }
   }
 
-  async function deleteKey(provider: ProviderId, keyId: string) {
+  async function deleteKey(provider: string, keyId: string) {
     if (!user) {
       setError('Please log in to manage provider keys');
       return;
@@ -286,10 +319,11 @@ export default function KeysPage() {
     setOperationLoading((s) => ({ ...s, [provider]: true }));
 
     try {
-      // Per-key delete: removes exactly this key and never the provider's others.
+      // Per-key delete: removes exactly this key and never the provider's others. The
+      // path uses the id the row was stored under, which may be an old alias.
       await api.delete(`/user/keys/${provider}/${keyId}`);
       await refreshKeys();
-      setSuccess(`${getProviderName(provider)} key removed`);
+      setSuccess(`${providerName(provider)} key removed`);
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete key');
@@ -301,7 +335,9 @@ export default function KeysPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-10">
       <div className="mb-6">
-        <p className="mb-1 text-xs font-medium uppercase tracking-wider text-copper">Gateway access</p>
+        <p className="mb-1 text-xs font-medium uppercase tracking-wider text-copper">
+          Gateway access
+        </p>
         <h1 className="text-2xl font-semibold text-slate-100">Your gateway key</h1>
         <p className="mt-1 text-sm text-slate-400">
           Signed in as <span className="text-slate-200">{user?.username ?? '…'}</span>
@@ -402,133 +438,174 @@ export default function KeysPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {PROVIDERS.map((provider) => {
-                  const providerKeys = keys.filter((key) => key.provider === provider.id);
-                  const isConfigured = providerKeys.length > 0;
-                  const isEditing = editMode[provider.id];
-                  const currentValue = values[provider.id];
-                  const isOperating = operationLoading[provider.id];
+                {(['free', 'credit'] as const).map((tier) => {
+                  const rows = providers.filter((provider) => provider.tier === tier);
+                  if (rows.length === 0) return null;
 
                   return (
-                    <tr key={provider.id} className="align-middle">
-                      <td className="px-5 py-4 font-medium text-slate-200">{provider.name}</td>
-                      <td className="px-5 py-4">
-                        {providerKeys.length > 0 && (
-                          <ul className="mb-3 space-y-2">
-                            {providerKeys.map((key) => (
-                              <li
-                                key={key.id}
-                                className="flex items-center justify-between gap-3 rounded-lg border border-copper/35 border-l-2 border-l-copper bg-copper/10 px-3 py-2 transition hover:border-copper/60"
-                              >
-                                <div className="min-w-0">
-                                  <p className="truncate text-xs font-medium text-copper-lift">
-                                    {key.label}
-                                  </p>
-                                  <p className="truncate font-mono text-[0.65rem] text-slate-400">
-                                    {key.fingerprint.slice(0, 16)}
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  {key.parked ? (
-                                    <span
-                                      className="whitespace-nowrap text-[0.65rem] font-medium text-amber-400"
-                                      title="The provider throttled this key"
+                    <Fragment key={tier}>
+                      <tr className="bg-slate-950/70">
+                        <td colSpan={4} className="px-5 py-3">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-copper">
+                            {tier === 'free' ? 'Free-tier providers' : 'Credit-based providers'}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-400">
+                            {tier === 'free'
+                              ? 'Recurring free allowances — these keys keep working every day.'
+                              : 'One-time signup credit — a key stops working once the balance is spent.'}
+                          </p>
+                        </td>
+                      </tr>
+                      {rows.map((provider) => {
+                        const providerKeys = keys.filter((key) =>
+                          ownsProvider(provider, key.provider),
+                        );
+                        const isConfigured = providerKeys.length > 0;
+                        const isEditing = editMode[provider.id];
+                        const currentValue = values[provider.id];
+                        const isOperating = operationLoading[provider.id];
+
+                        return (
+                          <tr key={provider.id} className="align-middle">
+                            <td className="px-5 py-4 font-medium text-slate-200">
+                              <span className="block">{provider.name}</span>
+                              <span className="mt-1 block text-xs font-normal text-slate-500">
+                                {provider.freeNote}{' '}
+                                <a
+                                  href={provider.signupUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-copper-lift underline-offset-2 hover:underline"
+                                >
+                                  get a key
+                                </a>
+                              </span>
+                              {provider.requiresEnv && (
+                                <span className="mt-1 block text-[0.65rem] font-normal text-amber-400">
+                                  Server must also set {provider.requiresEnv}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-5 py-4">
+                              {providerKeys.length > 0 && (
+                                <ul className="mb-3 space-y-2">
+                                  {providerKeys.map((key) => (
+                                    <li
+                                      key={key.id}
+                                      className="flex items-center justify-between gap-3 rounded-lg border border-copper/35 border-l-2 border-l-copper bg-copper/10 px-3 py-2 transition hover:border-copper/60"
                                     >
-                                      throttled · back in {formatRetry(key.retry_after_ms)}
-                                    </span>
-                                  ) : (
-                                    <span className="whitespace-nowrap text-[0.65rem] font-medium text-emerald-400">
-                                      available
-                                    </span>
-                                  )}
+                                      <div className="min-w-0">
+                                        <p className="truncate text-xs font-medium text-copper-lift">
+                                          {key.label}
+                                        </p>
+                                        <p className="truncate font-mono text-[0.65rem] text-slate-400">
+                                          {key.fingerprint.slice(0, 16)}
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        {key.parked ? (
+                                          <span
+                                            className="whitespace-nowrap text-[0.65rem] font-medium text-amber-400"
+                                            title="The provider throttled this key"
+                                          >
+                                            throttled · back in {formatRetry(key.retry_after_ms)}
+                                          </span>
+                                        ) : (
+                                          <span className="whitespace-nowrap text-[0.65rem] font-medium text-emerald-400">
+                                            available
+                                          </span>
+                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={() => deleteKey(key.provider, key.id)}
+                                          disabled={isOperating || !user}
+                                          className="rounded-lg border border-slate-700 p-1.5 text-red-400 hover:bg-slate-800 disabled:opacity-50"
+                                          aria-label={`Remove ${key.label}`}
+                                          title="Remove this key"
+                                        >
+                                          {isOperating ? (
+                                            <Loader2 className="animate-spin" size={14} />
+                                          ) : (
+                                            <Trash2 size={14} />
+                                          )}
+                                        </button>
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                              <form
+                                onSubmit={(e) => {
+                                  e.preventDefault();
+                                  submitProviderKey(provider.id);
+                                }}
+                              >
+                                <input
+                                  type="password"
+                                  placeholder={
+                                    isConfigured && !isEditing
+                                      ? `Add another ${provider.name} key`
+                                      : 'Paste provider key here'
+                                  }
+                                  value={currentValue}
+                                  onChange={(e) =>
+                                    setValues((s) => ({
+                                      ...s,
+                                      [provider.id]: e.target.value,
+                                    }))
+                                  }
+                                  className="w-full min-w-[200px] rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-copper"
+                                  autoComplete="off"
+                                />
+                              </form>
+                            </td>
+                            <td className="px-5 py-4">
+                              {isConfigured ? (
+                                <span className="inline-flex items-center gap-1.5 font-medium text-emerald-400">
+                                  <Check size={16} /> {providerKeys.length}{' '}
+                                  {providerKeys.length === 1 ? 'key' : 'keys'}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 text-slate-500">
+                                  <X size={16} /> Not set
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => submitProviderKey(provider.id)}
+                                  disabled={isOperating || !currentValue.trim() || !user}
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-100 transition hover:border-copper/50 hover:bg-slate-700 disabled:opacity-50"
+                                >
+                                  {isOperating && <Loader2 className="animate-spin" size={14} />}
+                                  Add key
+                                </button>
+                                {isEditing && (
                                   <button
                                     type="button"
-                                    onClick={() => deleteKey(provider.id, key.id)}
-                                    disabled={isOperating || !user}
-                                    className="rounded-lg border border-slate-700 p-1.5 text-red-400 hover:bg-slate-800 disabled:opacity-50"
-                                    aria-label={`Remove ${key.label}`}
-                                    title="Remove this key"
+                                    onClick={() => {
+                                      setEditMode((s) => ({
+                                        ...s,
+                                        [provider.id]: false,
+                                      }));
+                                      setValues((s) => ({
+                                        ...s,
+                                        [provider.id]: '',
+                                      }));
+                                    }}
+                                    className="rounded-lg border border-slate-700 px-2.5 py-2 text-xs text-slate-400 transition hover:border-copper/40 hover:bg-slate-800"
                                   >
-                                    {isOperating ? (
-                                      <Loader2 className="animate-spin" size={14} />
-                                    ) : (
-                                      <Trash2 size={14} />
-                                    )}
+                                    Cancel
                                   </button>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                        <form
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            submitProviderKey(provider.id);
-                          }}
-                        >
-                          <input
-                            type="password"
-                            placeholder={
-                              isConfigured && !isEditing
-                                ? `Add another ${provider.name} key`
-                                : 'Paste provider key here'
-                            }
-                            value={currentValue}
-                            onChange={(e) =>
-                              setValues((s) => ({
-                                ...s,
-                                [provider.id]: e.target.value,
-                              }))
-                            }
-                            className="w-full min-w-[200px] rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-copper"
-                            autoComplete="off"
-                          />
-                        </form>
-                      </td>
-                      <td className="px-5 py-4">
-                        {isConfigured ? (
-                          <span className="inline-flex items-center gap-1.5 font-medium text-emerald-400">
-                            <Check size={16} /> {providerKeys.length}{' '}
-                            {providerKeys.length === 1 ? 'key' : 'keys'}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 text-slate-500">
-                            <X size={16} /> Not set
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => submitProviderKey(provider.id)}
-                            disabled={isOperating || !currentValue.trim() || !user}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-100 transition hover:border-copper/50 hover:bg-slate-700 disabled:opacity-50"
-                          >
-                            {isOperating && <Loader2 className="animate-spin" size={14} />}
-                            Add key
-                          </button>
-                          {isEditing && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditMode((s) => ({
-                                  ...s,
-                                  [provider.id]: false,
-                                }));
-                                setValues((s) => ({
-                                  ...s,
-                                  [provider.id]: '',
-                                }));
-                              }}
-                              className="rounded-lg border border-slate-700 px-2.5 py-2 text-xs text-slate-400 transition hover:border-copper/40 hover:bg-slate-800"
-                            >
-                              Cancel
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </Fragment>
                   );
                 })}
               </tbody>

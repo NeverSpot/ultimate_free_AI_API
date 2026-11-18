@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { CREDIT_PROVIDERS_ENV, PROVIDER_SPECS } from '../providers/catalog';
 import type { Credential, ProviderId } from '../providers/types';
 
 /**
@@ -18,12 +19,13 @@ export interface CredentialPool {
   size(provider?: ProviderId): number;
 }
 
-/** Env var to provider. One line per provider; adding one is a one-line change. */
-const ENV_PROVIDERS: ReadonlyArray<readonly [envVar: string, provider: ProviderId]> = [
-  ['NVIDIA_NIM_KEYS', 'nvidia'],
-  ['OPENROUTER_KEYS', 'openrouter'],
-  ['TOKENHARBOR_KEYS', 'tokenharbor'],
-];
+/** Env var to provider, derived from the provider catalog so the two cannot drift. */
+function envProviders(raw: NodeJS.ProcessEnv): ReadonlyArray<readonly [string, ProviderId]> {
+  const creditEnabled = raw[CREDIT_PROVIDERS_ENV] === '1';
+  return PROVIDER_SPECS.filter((spec) => spec.tier === 'free' || creditEnabled).map(
+    (spec) => [spec.keyEnvVar, spec.id] as const,
+  );
+}
 
 const ID_HASH_LENGTH = 16;
 const FULL_HASH_LENGTH = 64;
@@ -40,7 +42,7 @@ export function loadCredentialPool(raw: NodeJS.ProcessEnv): CredentialPool {
   const problems: string[] = [];
   const byProvider = new Map<ProviderId, Credential[]>();
 
-  for (const [envVar, provider] of ENV_PROVIDERS) {
+  for (const [envVar, provider] of envProviders(raw)) {
     const secrets = parseSecrets(raw, envVar, problems);
     if (secrets.length > 0) {
       byProvider.set(provider, buildCredentials(provider, secrets));

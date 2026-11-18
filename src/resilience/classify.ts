@@ -242,6 +242,8 @@ export function rateLimitVerdict(
 export interface ErrorProfile {
   authStatuses: readonly number[];
   modelGoneStatuses: readonly number[];
+  /** A non-auth status that really means "this credential is bad" (Google's 400). */
+  isAuth?: (parsed: ParsedError) => boolean;
   /** 400 that really means "unknown model", decided structurally, never by substring. */
   isInvalidModel?: (parsed: ParsedError) => boolean;
   /** 429 that really means "free allowance spent", not ordinary throttling. */
@@ -275,6 +277,56 @@ const GENERIC_PROFILE: ErrorProfile = {
   modelGoneStatuses: [404],
 };
 
+/**
+ * A provider whose "free" is a recurring allowance. 401/403 mean the key is bad;
+ * 404 means the model left the catalog.
+ */
+const FREE_TIER_PROFILE: ErrorProfile = {
+  authStatuses: [401, 403],
+  modelGoneStatuses: [404],
+};
+
+/**
+ * A provider whose "free" is a finite signup balance. 402 is added because the balance
+ * is per credential: retrying the same key can never succeed, so it must fail over
+ * instead of backing off.
+ */
+const CREDIT_PROFILE: ErrorProfile = {
+  authStatuses: [401, 402, 403],
+  modelGoneStatuses: [404],
+};
+
+/**
+ * Google answers a bad key with 400 `API key not valid. Please pass a valid API key.`
+ * rather than 401, so the status alone would classify a dead credential as the caller's
+ * fault and park the whole provider behind one typo.
+ */
+function isGoogleInvalidKey(parsed: ParsedError): boolean {
+  const message = parsed.message?.trim().toLowerCase() ?? '';
+  return message.startsWith('api key not valid') || message.startsWith('api key expired');
+}
+
+const FREE_TIER_IDS = [
+  'groq',
+  'cerebras',
+  'sambanova',
+  'zai',
+  'mistral',
+  'cloudflare',
+  'cohere',
+  'aimlapi',
+] as const;
+
+const CREDIT_IDS = [
+  'together',
+  'fireworks',
+  'deepinfra',
+  'novita',
+  'hyperbolic',
+  'huggingface',
+  'replicate',
+] as const;
+
 /** Per-adapter quirks. `generic` is the fallback for an unknown provider id. */
 export const ERROR_PROFILES: Record<string, ErrorProfile> = {
   nvidia: {
@@ -293,6 +345,9 @@ export const ERROR_PROFILES: Record<string, ErrorProfile> = {
     modelGoneStatuses: [404],
     isAllowance: isTokenHarborAllowance,
   },
+  google: { ...FREE_TIER_PROFILE, isAuth: isGoogleInvalidKey },
+  ...Object.fromEntries(FREE_TIER_IDS.map((id) => [id, FREE_TIER_PROFILE])),
+  ...Object.fromEntries(CREDIT_IDS.map((id) => [id, CREDIT_PROFILE])),
   generic: GENERIC_PROFILE,
 };
 
@@ -338,7 +393,7 @@ function classifyKind(
   }
 
   // 4-5. Credential and model state, per adapter profile.
-  if (profile.authStatuses.includes(status)) {
+  if (profile.authStatuses.includes(status) || profile.isAuth?.(parsed) === true) {
     return { kind: 'auth' };
   }
   if (profile.modelGoneStatuses.includes(status)) {

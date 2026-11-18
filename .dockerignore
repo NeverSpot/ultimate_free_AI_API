@@ -1,0 +1,33 @@
+# Keep secrets and local state out of the build context and layer cache.
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output are produced inside the image.
+node_modules
+dist
+
+# VCS and tooling
+.git
+.gitignore
+.codegraph
+.code-review-graph
+.agents
+.idea
+.vscode
+
+# Not needed to build or run the gateway image.
+frontend
+test
+load
+sdk
+docs
+artifacts
+coverage
+tmp
+
+# Logs, dumps and local scratch
+*.log
+eval-results.json
+eval-results.md
+*.pid

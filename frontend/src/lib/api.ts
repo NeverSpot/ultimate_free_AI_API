@@ -1,4 +1,13 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/v1';
+/**
+ * Where the API lives, including the `/v1` prefix.
+ *
+ * Defaults to same-origin `/v1`: in the Vercel deployment `vercel.json` routes
+ * `/v1/*` to the gateway service, so the browser and the API share one domain
+ * and the session cookie stays first-party. Local `next dev` serves the app on
+ * its own port, so set NEXT_PUBLIC_API_URL (e.g. `http://localhost:8080/v1`) in
+ * `frontend/.env.local`. Trailing slashes are stripped so paths never double up.
+ */
+const BASE_URL = (process.env.NEXT_PUBLIC_API_URL || '/v1').replace(/\/+$/, '');
 
 /**
  * Every request sends the httpOnly session cookie. `no-store` keeps the
@@ -61,6 +70,22 @@ export interface LoginResponse {
 export interface GatewayKeyResponse {
   /** The current key, or null for a legacy account with no recoverable copy. */
   gateway_api_key: string | null;
+}
+
+export interface ProviderInfo {
+  id: string;
+  name: string;
+  tier: 'free' | 'credit';
+  key_env_var: string;
+  free_note: string;
+  signup_url: string;
+  docs_url: string;
+  aliases: string[];
+  requires_env: string | null;
+}
+
+export interface ProvidersResponse {
+  providers: ProviderInfo[];
 }
 
 export interface RegenerateKeyResponse {

@@ -2,10 +2,21 @@ import { HomeCta } from '@/components/home-cta';
 import { CodeBlock } from '@/components/site/code-block';
 import { Section } from '@/components/site/section';
 
+/**
+ * The snippet has to show an absolute URL a Python client can actually reach.
+ * NEXT_PUBLIC_API_URL carries it when set to a full origin (Vercel: the project
+ * domain plus `/v1`); otherwise the page falls back to a placeholder instead of
+ * advertising a localhost address that no reader can call.
+ */
+const CONFIGURED_API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
+const DOCS_API_URL = CONFIGURED_API_URL.startsWith('http')
+  ? CONFIGURED_API_URL.replace(/\/+$/, '')
+  : 'https://your-gateway.example.com/v1';
+
 const QUICKSTART = `from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:8080/v1",
+    base_url="${DOCS_API_URL}",
     api_key="gk_your_gateway_key",
 )
 
@@ -14,7 +25,11 @@ reply = client.chat.completions.create(
     messages=[{"role": "user", "content": "hello"}],
 )`;
 
-const FACTS = ['3 providers', 'OpenAI SDK compatible', 'AES-256-GCM at rest'] as const;
+const FACTS = [
+  '12 free-tier providers',
+  '7 credit-backed, opt-in',
+  'OpenAI SDK compatible',
+] as const;
 
 const STEPS = [
   {
@@ -46,10 +61,10 @@ export default function Home() {
           </h1>
 
           <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-slate-400">
-            Free-tier keys are capped per provider. This gateway pools the free models from
-            OpenRouter, NVIDIA NIM and TokenHarbor behind a single OpenAI-compatible endpoint — so
-            a request that hits a rate limit on one provider is routed to another that still has
-            capacity.
+            Free-tier keys are capped per provider. This gateway pools twelve providers&apos; free
+            models — OpenRouter, Groq, Cerebras, Gemini and more — behind a single OpenAI-compatible
+            endpoint, so a request that hits a rate limit on one provider is routed to another that
+            still has capacity.
           </p>
 
           <HomeCta />

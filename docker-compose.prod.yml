@@ -1,0 +1,27 @@
+# Production overlay. Always deploy with BOTH files:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile app up -d --wait
+#
+# `:?` makes `docker compose config` fail before a single container starts, instead
+# of booting a gateway that crash-loops on `src/config/env.ts` validation.
+name: gateway
+
+services:
+  gateway:
+    environment:
+      - NODE_ENV=production
+      # Refuses to boot when missing (env.ts): an empty admin token or signing
+      # secret is a hard failure, never a silent fallback.
+      - ADMIN_TOKEN=${ADMIN_TOKEN:?set ADMIN_TOKEN (openssl rand -hex 32)}
+      - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY:?set MASTER_ENCRYPTION_KEY (32+ chars, openssl rand -hex 32)}
+      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET (32+ chars, openssl rand -hex 32)}
+      # Production refuses the console mail transport, so delivery must be real.
+      - MAIL_TRANSPORT=${MAIL_TRANSPORT:?set MAIL_TRANSPORT to smtp or resend}
+      - MAIL_FROM=${MAIL_FROM:?set MAIL_FROM to a verified sender address}
+      # Browser-facing origins: localhost defaults silently break CORS and OAuth.
+      - CORS_ORIGIN=${CORS_ORIGIN:?set CORS_ORIGIN to the deployed frontend origin}
+      - FRONTEND_URL=${FRONTEND_URL:?set FRONTEND_URL to the deployed frontend origin}
+      - OAUTH_CALLBACK_BASE=${OAUTH_CALLBACK_BASE:?set OAUTH_CALLBACK_BASE to the public API origin}
+      # Codes must never be echoed in an API response in production.
+      - OTP_DEV_RETURN_CODE=false
+      - LOG_LEVEL=${LOG_LEVEL:-info}
