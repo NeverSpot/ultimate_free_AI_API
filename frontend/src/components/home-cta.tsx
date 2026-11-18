@@ -15,9 +15,10 @@ export function HomeCta() {
   if (loading) {
     // Hold the layout while the session probe runs so a signed-in visitor does
     // not see "Create Account" flash before the dashboard link replaces it.
+    // Deliberately static: the landing page ships no self-animation.
     return (
       <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-        <div className="h-12 w-56 animate-pulse rounded-xl bg-slate-800/60" />
+        <div className="h-12 w-56 rounded-xl bg-slate-800/60" />
       </div>
     );
   }

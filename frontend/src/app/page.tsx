@@ -1,62 +1,114 @@
-import { KeyRound, ShieldCheck, Zap } from 'lucide-react';
 import { HomeCta } from '@/components/home-cta';
+import { CodeBlock } from '@/components/site/code-block';
+import { Section } from '@/components/site/section';
+
+const QUICKSTART = `from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8080/v1",
+    api_key="gk_your_gateway_key",
+)
+
+reply = client.chat.completions.create(
+    model="free",
+    messages=[{"role": "user", "content": "hello"}],
+)`;
+
+const FACTS = ['3 providers', 'OpenAI SDK compatible', 'AES-256-GCM at rest'] as const;
+
+const STEPS = [
+  {
+    title: 'Add a key',
+    body: 'One row per provider key, encrypted at rest. Nothing leaves the gateway.',
+  },
+  {
+    title: 'Reserve headroom',
+    body: 'A Redis Lua script checks RPM, RPD and TPM and decrements in one round-trip, so two requests can never claim the same capacity.',
+  },
+  {
+    title: 'Fail over early',
+    body: 'A 429 or an open breaker hands the request to the next provider. After the first streamed token it stops instead of retrying.',
+  },
+] as const;
 
 export default function Home() {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-4 py-20 text-center">
-      <div className="inline-flex items-center gap-2 rounded-full border border-copper/40 bg-slate-900/80 px-4 py-1.5 text-xs font-medium text-slate-300">
-        <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-        OpenAI-Compatible Free-Tier Gateway
-      </div>
-
-      <h1 className="mt-8 max-w-3xl text-5xl font-bold tracking-tight text-slate-100 sm:text-6xl">
-        Many free models.
-        <br />
-        <span className="text-copper">One API key.</span>
-      </h1>
-
-      <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-400">
-        Free-tier keys are capped per provider. This gateway pools the free models from OpenRouter,
-        NVIDIA NIM, TokenHarbor and more behind a single OpenAI-compatible endpoint — so a request
-        that would 429 on one provider is routed to another that still has capacity.
-      </p>
-
-      {/* Landing CTAs — session-aware; see components/home-cta.tsx */}
-      <HomeCta />
-
-      {/* Value Prop Highlights */}
-      <div className="mt-20 grid max-w-4xl grid-cols-1 gap-6 sm:grid-cols-3 text-left">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur transition hover:border-copper/40">
-          <div className="mb-4 inline-flex rounded-lg border border-copper/30 bg-copper/10 p-3 text-copper-lift">
-            <KeyRound size={20} />
-          </div>
-          <h3 className="text-base font-semibold text-slate-100">Bring Your Own Keys</h3>
-          <p className="mt-2 text-sm text-slate-400">
-            Plug in your free provider keys. Keys are encrypted at rest with AES-256-GCM.
+    <>
+      {/* 1. Hero — headline, one sentence, actions, the API as the product shot. */}
+      <Section divided={false}>
+        <div className="text-center">
+          <p className="font-mono text-xs uppercase tracking-[0.18em] text-copper">
+            OpenAI-compatible · self-hosted
           </p>
-        </div>
 
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur transition hover:border-copper/40">
-          <div className="mb-4 inline-flex rounded-lg border border-copper/30 bg-copper/10 p-3 text-copper-lift">
-            <Zap size={20} />
-          </div>
-          <h3 className="text-base font-semibold text-slate-100">Capacity-First Routing</h3>
-          <p className="mt-2 text-sm text-slate-400">
-            Dynamic ledger tracks RPM/TPM across providers and routes to the model with head-room.
-          </p>
-        </div>
+          <h1 className="mt-6 text-4xl font-semibold tracking-tight text-slate-100 sm:text-5xl">
+            Many free models. <span className="text-copper">One API key.</span>
+          </h1>
 
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur transition hover:border-copper/40">
-          <div className="mb-4 inline-flex rounded-lg border border-copper/30 bg-copper/10 p-3 text-copper-lift">
-            <ShieldCheck size={20} />
-          </div>
-          <h3 className="text-base font-semibold text-slate-100">Automatic Failover</h3>
-          <p className="mt-2 text-sm text-slate-400">
-            Pre-token streaming failover and circuit breakers ensure zero 429 downtime for your
-            apps.
+          <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-slate-400">
+            Free-tier keys are capped per provider. This gateway pools the free models from
+            OpenRouter, NVIDIA NIM and TokenHarbor behind a single OpenAI-compatible endpoint — so
+            a request that would 429 on one provider is routed to another that still has capacity.
           </p>
+
+          <HomeCta />
+
+          <ul className="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 font-mono text-xs text-slate-400">
+            {FACTS.map((fact) => (
+              <li key={fact}>{fact}</li>
+            ))}
+          </ul>
+
+          <div className="mx-auto mt-10 max-w-xl">
+            <CodeBlock code={QUICKSTART} label="python · openai sdk" />
+          </div>
         </div>
-      </div>
-    </div>
+      </Section>
+
+      {/* 2. How a request moves — numbered narrative, no cards. */}
+      <Section width="wide">
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] lg:gap-16">
+          <div className="lg:sticky lg:top-24 lg:self-start">
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-100 sm:text-3xl">
+              How a request moves
+            </h2>
+            <p className="mt-3 max-w-xs text-sm leading-relaxed text-slate-400">
+              Three steps, all inside one OpenAI-shaped call.
+            </p>
+          </div>
+
+          <ol className="divide-y divide-slate-800 border-t border-slate-800">
+            {STEPS.map((step, index) => (
+              <li key={step.title} className="flex gap-5 py-6">
+                <span className="font-mono text-xs text-copper-lift">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <div>
+                  <h3 className="text-base font-semibold text-slate-100">{step.title}</h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-slate-400">{step.body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </Section>
+
+      {/* 3. Closing CTA — the last chance to act. */}
+      <Section divided={false} className="bg-slate-900/40">
+        <div className="text-center">
+          <h2 className="text-2xl font-semibold tracking-tight text-slate-100 sm:text-3xl">
+            Bring a key. Get an endpoint.
+          </h2>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-400">
+            No client rewrite — point your SDK at the gateway and ask for the model{' '}
+            <code className="rounded bg-slate-950 px-1.5 py-0.5 font-mono text-xs text-slate-200">
+              free
+            </code>
+            .
+          </p>
+          <HomeCta />
+        </div>
+      </Section>
+    </>
   );
 }

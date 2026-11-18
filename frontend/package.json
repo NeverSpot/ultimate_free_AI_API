@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "check:tokens": "node scripts/check-tokens.mjs"
+    "check:tokens": "node scripts/check-tokens.mjs",
+    "check:landing": "node scripts/check-landing.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.72.0",
