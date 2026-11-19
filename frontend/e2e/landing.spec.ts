@@ -29,3 +29,26 @@ test('landing keeps its contract', async ({ page }) => {
   await expect(page.locator('pre code')).toContainText('client = OpenAI(');
   await expect(page.locator('pre code')).toContainText('model="free"');
 });
+
+test('the quickstart panel never scrolls horizontally', async ({ page }) => {
+  for (const width of [1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/');
+
+    const pre = page.locator('pre').first();
+    const metrics = await pre.evaluate((node) => ({
+      scrollWidth: node.scrollWidth,
+      clientWidth: node.clientWidth,
+    }));
+
+    expect(
+      metrics.scrollWidth,
+      `${width}px: scrollWidth ${metrics.scrollWidth} > clientWidth ${metrics.clientWidth}`,
+    ).toBeLessThanOrEqual(metrics.clientWidth + 1);
+
+    if (width === 1280) {
+      await expect(page.getByRole('button', { name: /copy/i })).toBeVisible();
+      await expect(pre).toContainText('client = OpenAI(');
+    }
+  }
+});

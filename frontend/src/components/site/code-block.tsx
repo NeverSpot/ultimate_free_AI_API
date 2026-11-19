@@ -33,7 +33,7 @@ export function CodeBlock({ code, label }: { code: string; label: string }) {
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>
-      <pre className="overflow-x-auto px-4 py-4 text-xs leading-relaxed whitespace-pre-wrap break-words text-slate-200 sm:whitespace-pre sm:text-sm">
+      <pre className="px-4 py-4 text-xs leading-relaxed whitespace-pre-wrap break-words text-slate-200 sm:text-[13px]">
         <code>{code}</code>
       </pre>
     </div>
