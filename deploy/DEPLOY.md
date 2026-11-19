@@ -61,7 +61,7 @@ Log out and back in (or `newgrp docker`) so the group change applies, then `dock
 
 ```bash
 sudo mkdir -p /opt/ultimate && sudo chown "$USER":"$USER" /opt/ultimate
-git clone https://github.com/neverspot/Ultimate_frre_ai.git /opt/ultimate
+git clone https://github.com/NeverSpot/ultimate_free_AI_API.git /opt/ultimate
 cd /opt/ultimate
 ```
 
