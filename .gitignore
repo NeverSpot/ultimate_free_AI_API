@@ -76,3 +76,4 @@ docs/worker-brief.md
 /BLOCK_*.md
 eval-results.*
 load/report.*
+deploy/certs/
