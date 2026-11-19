@@ -7,6 +7,8 @@ import { createUserProviderKeyModel } from './models/user-provider-key';
 import { createEmailVerificationModel } from './models/email-verification';
 import { createOAuthAccountModel } from './models/oauth-account';
 import { createMailer } from './lib/mailer';
+import { createUsageModel } from './models/usage';
+import { AccountingStore } from './telemetry/store';
 import { MockProviderAdapter } from './providers/mock';
 import { defaultAdapters } from './providers/defaults';
 import type { Credential } from './providers/types';
@@ -33,6 +35,13 @@ async function main(): Promise<void> {
   const providerKeyStore = createUserProviderKeyModel(db, config.encryptionKey);
   const emailVerificationStore = createEmailVerificationModel(db);
   const oauthAccounts = createOAuthAccountModel(db, config.encryptionKey);
+  // Request accounting feeds the keys dashboard's usage strip. Batched so a
+  // chat response never waits on an insert; flushed and closed on shutdown.
+  const usageStore = createUsageModel(db);
+  const accountingStore = new AccountingStore(db, {
+    batchSize: 25,
+    flushIntervalMs: 2_000,
+  });
   const mailer = createMailer({
     transport: config.mailTransport ?? 'console',
     from: config.mailFrom ?? 'Ultimate Free AI <no-reply@localhost>',
@@ -65,6 +74,8 @@ async function main(): Promise<void> {
     adapters: defaultAdapters(),
     logger: true,
     userStore,
+    usageStore,
+    accountingStore,
     providerKeyStore,
     emailVerificationStore,
     oauthAccounts,
@@ -75,6 +86,8 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info({ signal }, 'shutting down');
     await app.close();
+    await accountingStore.close();
+    await db.close();
     process.exit(0);
   };
 

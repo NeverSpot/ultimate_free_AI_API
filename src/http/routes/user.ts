@@ -1,8 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { ApiError } from '../errors';
 import type { UserModel } from '../../models/user';
+import type { UsageModel } from '../../models/usage';
 
-export function registerUserRoutes(app: FastifyInstance, deps: { userStore: UserModel }): void {
+export function registerUserRoutes(
+  app: FastifyInstance,
+  deps: { userStore: UserModel; usageStore?: UsageModel },
+): void {
   app.get('/v1/user/me', async (request, reply) => {
     if (!request.user) {
       throw new ApiError('auth', 'authentication required');
@@ -28,4 +32,18 @@ export function registerUserRoutes(app: FastifyInstance, deps: { userStore: User
     reply.header('Cache-Control', 'no-store');
     return reply.send({ gateway_api_key: gatewayApiKey });
   });
+
+  // Registered only when a usage store is wired: a host without accounting must
+  // answer 404 (the dashboard hides the strip) rather than serve invented zeros.
+  const usageStore = deps.usageStore;
+  if (usageStore !== undefined) {
+    app.get('/v1/user/usage', async (request, reply) => {
+      if (!request.user) {
+        throw new ApiError('auth', 'authentication required');
+      }
+      const usage = await usageStore.getUsage(request.user.id);
+      reply.header('Cache-Control', 'no-store');
+      return reply.send({ usage });
+    });
+  }
 }

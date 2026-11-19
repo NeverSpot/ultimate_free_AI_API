@@ -10,6 +10,8 @@ import {
   type UserProviderKeyModel,
 } from '../../models/user-provider-key';
 import type { ParkingStatus } from '../../resilience/parking';
+import { findProviderSpec } from '../../providers/catalog';
+import type { KeyTestResult } from '../../providers/test-key';
 
 const KeySummary = Type.Object({
   id: Type.String(),
@@ -47,6 +49,19 @@ const KeyParams = Type.Object({
 
 const DeleteResponse = Type.Object({
   ok: Type.Boolean(),
+});
+
+const TestResponse = Type.Object({
+  ok: Type.Boolean(),
+  provider: Type.String(),
+  model: Type.Union([Type.String(), Type.Null()]),
+  latency_ms: Type.Number(),
+  prompt_tokens: Type.Number(),
+  completion_tokens: Type.Number(),
+  reply: Type.Union([Type.String(), Type.Null()]),
+  error: Type.Union([Type.String(), Type.Null()]),
+  error_kind: Type.Union([Type.String(), Type.Null()]),
+  http_status: Type.Union([Type.Number(), Type.Null()]),
 });
 
 function requireNonEmpty(fields: Record<string, string | undefined>): void {
@@ -103,6 +118,11 @@ export function registerUserKeyRoutes(
      * nothing in this codebase calls it — the real one is the injected `Parking`.
      */
     isParked?: (credentialId: string) => Promise<ParkingStatus>;
+    /**
+     * Runs a live check against one stored key. Injected by the composition root
+     * so the route never imports a provider adapter or reads the environment.
+     */
+    testProviderKey?: (provider: string, secret: string) => Promise<KeyTestResult>;
   },
 ): void {
   const server = app.withTypeProvider<TypeBoxTypeProvider>();
@@ -205,6 +225,42 @@ export function registerUserKeyRoutes(
         throw new ApiError('not_found', 'no such key');
       }
       return reply.status(200).send({ ok: true });
+    },
+  );
+
+  /**
+   * Test one stored key against its own provider.
+   *
+   * Upstream failures are a 200 with `ok: false`: the request succeeded, the key
+   * did not. Only auth, an unknown key, or a provider/key mismatch is an HTTP error.
+   */
+  server.post(
+    '/v1/user/keys/:provider/:keyId/test',
+    { schema: { params: KeyParams, response: { 200: TestResponse } } },
+    async (request, reply) => {
+      const userId = requireUserId(request, deps.getUserId);
+      const keys = await store.listKeys(userId);
+      const key = keys.find((row) => row.id === request.params.keyId);
+      if (key === undefined) {
+        throw new ApiError('not_found', 'no such key');
+      }
+
+      const requested = findProviderSpec(request.params.provider);
+      const stored = findProviderSpec(key.provider);
+      if (requested === undefined || stored === undefined || requested.id !== stored.id) {
+        throw new ApiError('client', 'that key belongs to a different provider');
+      }
+
+      if (deps.testProviderKey === undefined) {
+        throw new ApiError('unsupported', 'key testing is not configured on this server');
+      }
+
+      const secret = await store.getDecryptedKey(userId, key.id);
+      if (secret === null) {
+        throw new ApiError('conflict', 'this server cannot decrypt the stored key');
+      }
+
+      return reply.status(200).send(await deps.testProviderKey(stored.id, secret));
     },
   );
 }

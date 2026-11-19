@@ -2,10 +2,11 @@
  * Where the API lives, including the `/v1` prefix.
  *
  * Defaults to same-origin `/v1`: in the Vercel deployment `vercel.json` routes
- * `/v1/*` to the gateway service, so the browser and the API share one domain
- * and the session cookie stays first-party. Local `next dev` serves the app on
- * its own port, so set NEXT_PUBLIC_API_URL (e.g. `http://localhost:8080/v1`) in
- * `frontend/.env.local`. Trailing slashes are stripped so paths never double up.
+ * `/v1/*` to the gateway service, and `next.config.ts` proxies `/v1/*` to the
+ * gateway during `next dev`. Browser and API therefore share one origin in both
+ * environments, so the session cookie stays first-party. Set NEXT_PUBLIC_API_URL
+ * only when the gateway is on a different origin in production. Trailing slashes
+ * are stripped so paths never double up.
  */
 const BASE_URL = (process.env.NEXT_PUBLIC_API_URL || '/v1').replace(/\/+$/, '');
 
@@ -17,6 +18,37 @@ const REQUEST_INIT: Pick<RequestInit, 'credentials' | 'cache'> = {
   credentials: 'include',
   cache: 'no-store',
 };
+
+/** Keep a wedged gateway from leaving a page spinning forever. */
+const REQUEST_TIMEOUT_MS = 15_000;
+
+/**
+ * One error shape for every failed call. `status` is the HTTP status, or 0 when
+ * the request never reached the gateway; `code` mirrors the OpenAI error code
+ * when the server sent one.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code: string | null;
+
+  constructor(message: string, status: number, code: string | null = null) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+/** A 401 is "signed out", not a transport failure; callers branch on this. */
+export function isUnauthorized(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.status === 401;
+}
+
+export interface SessionUser {
+  id: string;
+  username: string;
+  email: string;
+}
 
 export interface KeySummary {
   id: string;
@@ -92,6 +124,44 @@ export interface RegenerateKeyResponse {
   gateway_api_key: string;
 }
 
+export interface UsageSummary {
+  /** Rolling window the server used; 30 unless configured otherwise. */
+  window_days: number;
+  requests: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+  /** Requests that needed more than one provider attempt. */
+  failovers: number;
+  last_request_at: string | null;
+}
+
+export interface UsageResponse {
+  usage: UsageSummary;
+}
+
+export type ProviderHealth = 'healthy' | 'degraded' | 'unhealthy';
+
+export interface ProvidersHealthResponse {
+  status?: string;
+  /** Only providers the router has actually exercised appear here. */
+  providers: Record<string, ProviderHealth>;
+}
+
+export interface KeyTestResult {
+  ok: boolean;
+  provider: string;
+  model: string | null;
+  latency_ms: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  reply: string | null;
+  error: string | null;
+  error_kind: string | null;
+  http_status: number | null;
+}
+
 /** API origin without the `/v1` suffix, for browser navigations the server must see. */
 export function apiOrigin(): string {
   return BASE_URL.replace(/\/v1\/?$/, '');
@@ -102,75 +172,54 @@ export function oauthStartUrl(provider: 'google' | 'github'): string {
   return `${apiOrigin()}/v1/auth/oauth/${provider}/start`;
 }
 
-function getGatewayKey(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem('gateway_api_key') || localStorage.getItem('gateway_key');
-    if (raw) return raw;
-    const user = localStorage.getItem('user');
-    if (user) {
-      const parsed = JSON.parse(user);
-      if (parsed && (parsed.gateway_api_key || parsed.gateway_key)) {
-        return parsed.gateway_api_key || parsed.gateway_key;
-      }
-    }
-    return null;
-  } catch {
-    return null;
-  }
+/**
+ * Trust the server's list verbatim, but make the two optional row flags safe to
+ * render: an older gateway may omit them, and `undefined` must not read as parked.
+ */
+export function normalizeKeyList(response: ListKeysResponse | null | undefined): KeySummary[] {
+  if (!Array.isArray(response?.keys)) return [];
+  return response.keys
+    .filter((key) => typeof key?.id === 'string' && typeof key.provider === 'string')
+    .map((key) => ({
+      ...key,
+      parked: key.parked === true,
+      retry_after_ms: Number.isFinite(key.retry_after_ms) ? key.retry_after_ms : 0,
+    }));
 }
 
-function getHeaders(withBody = false): HeadersInit {
-  const headers: Record<string, string> = {};
+function getHeaders(withBody: boolean): HeadersInit {
   // Fastify rejects a JSON content-type with an empty body (400), so only
-  // declare it when a body is actually sent.
-  if (withBody) {
-    headers['Content-Type'] = 'application/json';
-  }
-  const key = getGatewayKey();
-  if (key) {
-    headers['Authorization'] = `Bearer ${key}`;
-  }
-  return headers;
+  // declare it when a body is actually sent. The session cookie is the only
+  // credential this client sends; the gateway key is never persisted here.
+  return withBody ? { 'Content-Type': 'application/json' } : {};
 }
 
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    // A 401 from /v1/auth/* means "wrong credentials", not "expired session".
-    // A 401 from /v1/user/me is the session probe itself: the caller (useSession)
-    // branches on it. Redirecting from either would reload the page and hide the error.
-    const isAuthRequest = response.url.includes('/v1/auth/');
-    const isSessionProbe = response.url.includes('/v1/user/me');
-    if (
-      response.status === 401 &&
-      !isAuthRequest &&
-      !isSessionProbe &&
-      typeof window !== 'undefined'
-    ) {
-      localStorage.removeItem('gateway_key');
-      localStorage.removeItem('gateway_api_key');
-      localStorage.removeItem('user');
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.href = '/login';
-    }
+async function errorFromResponse(response: Response): Promise<ApiError> {
+  let message = `HTTP ${response.status}`;
+  let code: string | null = null;
 
-    let message = `HTTP ${response.status}`;
-    try {
-      const body = await response.json();
-      if (body?.error?.message) {
-        message = body.error.message;
-      } else if (body?.message) {
-        message = body.message;
-      }
-    } catch {
-      // best effort
+  try {
+    const body: unknown = await response.json();
+    const envelope = body as {
+      error?: { message?: unknown; code?: unknown };
+      message?: unknown;
+    };
+    if (typeof envelope.error?.message === 'string' && envelope.error.message.length > 0) {
+      message = envelope.error.message;
+    } else if (typeof envelope.message === 'string' && envelope.message.length > 0) {
+      message = envelope.message;
     }
-    const err = new Error(message) as Error & { status?: number };
-    err.status = response.status;
-    throw err;
+    const rawCode = envelope.error?.code;
+    if (typeof rawCode === 'string' && rawCode.length > 0) {
+      code = rawCode;
+    } else if (typeof rawCode === 'number') {
+      code = String(rawCode);
+    }
+  } catch {
+    // A non-JSON error body still carries the status; the generic message stands.
   }
-  const text = await response.text();
-  return text ? (JSON.parse(text) as T) : (undefined as T);
+
+  return new ApiError(message, response.status, code);
 }
 
 function buildUrl(path: string): string {
@@ -181,43 +230,80 @@ function buildUrl(path: string): string {
   return `${BASE_URL}${cleanPath}`;
 }
 
-export const api = {
-  async get<T>(path: string): Promise<T> {
-    const response = await fetch(buildUrl(path), {
-      method: 'GET',
-      headers: getHeaders(),
+/**
+ * The one fetch wrapper: timeout, typed errors, JSON handling. It deliberately
+ * has no redirect side effect — the session provider owns "signed out", so a
+ * failed call never reloads the page and hides the message the caller wants.
+ */
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  let response: Response;
+
+  try {
+    response = await fetch(buildUrl(path), {
       ...REQUEST_INIT,
+      ...init,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    return handleResponse<T>(response);
+  } catch (error) {
+    if (
+      error instanceof DOMException &&
+      (error.name === 'TimeoutError' || error.name === 'AbortError')
+    ) {
+      throw new ApiError('The gateway did not answer in time. Try again.', 0, 'timeout');
+    }
+    throw new ApiError(
+      error instanceof Error ? error.message : 'Could not reach the gateway',
+      0,
+      'network',
+    );
+  }
+
+  if (!response.ok) {
+    throw await errorFromResponse(response);
+  }
+
+  const text = await response.text();
+  if (text.length === 0) {
+    return undefined as T;
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new ApiError(
+      'The gateway returned an invalid response.',
+      response.status,
+      'invalid_response',
+    );
+  }
+}
+
+export const api = {
+  get<T>(path: string): Promise<T> {
+    return request<T>(path, { method: 'GET', headers: getHeaders(false) });
   },
 
-  async post<T>(path: string, body?: unknown): Promise<T> {
-    const response = await fetch(buildUrl(path), {
+  post<T>(path: string, body?: unknown): Promise<T> {
+    return request<T>(path, {
       method: 'POST',
       headers: getHeaders(body !== undefined),
-      ...REQUEST_INIT,
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
-    return handleResponse<T>(response);
   },
 
-  async put<T>(path: string, body?: unknown): Promise<T> {
-    const response = await fetch(buildUrl(path), {
+  put<T>(path: string, body?: unknown): Promise<T> {
+    return request<T>(path, {
       method: 'PUT',
       headers: getHeaders(body !== undefined),
-      ...REQUEST_INIT,
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
-    return handleResponse<T>(response);
   },
 
-  async delete<T>(path: string, body?: unknown): Promise<T> {
-    const response = await fetch(buildUrl(path), {
+  delete<T>(path: string, body?: unknown): Promise<T> {
+    return request<T>(path, {
       method: 'DELETE',
       headers: getHeaders(body !== undefined),
-      ...REQUEST_INIT,
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
-    return handleResponse<T>(response);
   },
 };

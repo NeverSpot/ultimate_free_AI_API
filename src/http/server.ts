@@ -21,8 +21,11 @@ import { createJwtAuth } from './middleware/jwt-auth';
 import { registerUserRoutes } from './routes/user';
 import { registerOAuthRoutes } from './routes/oauth';
 import type { UserModel } from '../models/user';
+import type { UsageModel } from '../models/usage';
 import type { EmailVerificationModel } from '../models/email-verification';
 import type { OAuthAccountModel } from '../models/oauth-account';
+import type { AccountingStore } from '../telemetry/store';
+import { testKeyUnavailable, testProviderKey as runKeyTest } from '../providers/test-key';
 import { githubProvider, googleProvider, type OAuthProviderConfig } from '../lib/oauth/providers';
 import type { Mailer } from '../lib/mailer';
 import type { UserProviderKeyModel } from '../models/user-provider-key';
@@ -47,6 +50,13 @@ export interface ServerDeps {
   probes?: HealthProbes;
   idempotencyService?: IdempotencyService;
   userStore?: UserModel;
+  /** Per-user request accounting for the keys dashboard. */
+  usageStore?: UsageModel;
+  /**
+   * Batched writer for the `requests` table. Optional so hermetic tests do not
+   * need Postgres; production wires it in `index.ts`.
+   */
+  accountingStore?: AccountingStore;
   providerKeyStore?: UserProviderKeyModel;
   /**
    * Force the per-key health reader for `/v1/user/keys`. Normally omitted — the
@@ -175,9 +185,13 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       const url = request.url;
       if (url === '/healthz' || url.startsWith('/v1/auth/')) return;
 
-      // The JWT cookie is accepted ONLY on /v1/user/*: chat stays on gateway keys,
-      // which keeps the streaming endpoint off the CSRF surface.
-      if (url.startsWith('/v1/user/') && jwtCookieAuth) {
+      // The JWT cookie is accepted on /v1/user/* and on the read-only catalog
+      // (GET /v1/providers and /v1/providers/health), which the keys screen loads
+      // with the session alone. The catalog exception is GET-only: it answers with
+      // public gateway data and mutates nothing, so it adds no CSRF surface. Chat
+      // stays on gateway keys, and no non-GET request authenticates via the cookie.
+      const catalogRead = request.method === 'GET' && url.startsWith('/v1/providers');
+      if ((url.startsWith('/v1/user/') || catalogRead) && jwtCookieAuth) {
         const jwtUser = await jwtCookieAuth.tryAuthenticate(request);
         if (jwtUser) {
           request.user = { id: jwtUser.userId, username: jwtUser.username };
@@ -226,7 +240,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         ? { devReturnCode: deps.config.otpDevReturnCode }
         : {}),
     });
-    registerUserRoutes(app, { userStore: deps.userStore });
+    registerUserRoutes(app, {
+      userStore: deps.userStore,
+      ...(deps.usageStore !== undefined ? { usageStore: deps.usageStore } : {}),
+    });
 
     const oauthProviders = oauthProvidersFromConfig(deps.config);
     // Register even with zero providers: `/v1/auth/providers` must answer (with
@@ -259,6 +276,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   if (deps.providerKeyStore) {
     const parking = chatRuntime.parking;
+    const adaptersById = new Map<string, ProviderAdapter>();
+    for (const adapter of deps.adapters ?? [deps.provider]) {
+      adaptersById.set(adapter.id, adapter);
+    }
     // The module-level `isParked` helper from `resilience/parking` is deliberately
     // NOT used: nothing calls `configureParking`, so it throws on every call. The
     // router's instance is the real reader, which is why per-key health works out
@@ -271,6 +292,15 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       getUserId: (req) => req.user?.id ?? null,
       encryptionKey: deps.config.encryptionKey,
       isParked: keyHealth,
+      testProviderKey: async (provider, secret) => {
+        const adapter = adaptersById.get(provider);
+        return adapter === undefined
+          ? testKeyUnavailable(
+              provider,
+              `no adapter for ${provider} is enabled on this host (credit providers need ENABLE_CREDIT_PROVIDERS=1)`,
+            )
+          : runKeyTest(adapter, secret);
+      },
     });
   } else if (deps.config.nodeEnv === 'production') {
     throw new Error('buildServer: providerKeyStore is required when NODE_ENV=production');

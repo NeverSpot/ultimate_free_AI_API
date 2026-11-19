@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { useSession } from '../hooks/use-session';
+import { useSession } from '@/components/session-provider';
 
 export function AuthNav() {
-  const { user, loading } = useSession();
+  const { user, loading, refresh } = useSession();
   const router = useRouter();
 
   if (loading) return <nav className="flex items-center gap-4 text-sm text-slate-300" />;
@@ -32,17 +32,10 @@ export function AuthNav() {
           try {
             await api.post('/auth/logout'); // must succeed before we clear/redirect
           } catch {
-            return; // keep the session; surface via a toast/error if desired
+            return; // keep the session; the page can still show its own error
           }
-          try {
-            localStorage.removeItem('gateway_api_key');
-            localStorage.removeItem('gateway_key');
-            localStorage.removeItem('user');
-          } catch {
-            /* ignore */
-          }
+          await refresh();
           router.push('/login');
-          router.refresh();
         }}
         className="transition hover:text-copper-lift"
       >

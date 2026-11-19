@@ -7,5 +7,7 @@ package-lock.json
 docs/**/*.md
 load/*.json
 frontend/.next/**
+frontend/test-results/**
+frontend/playwright-report/**
 eval-results.json
 frontend/next-env.d.ts

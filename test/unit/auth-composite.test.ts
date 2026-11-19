@@ -275,3 +275,35 @@ test('user chat: request with exact model like "gpt-4o" does not call paid model
   const body = JSON.parse(res.body);
   assert.equal(body.error.code, 'exhausted');
 });
+
+test('composite auth: JWT cookie alone reaches the read-only catalog', async (t) => {
+  const app = makeApp();
+  t.after(async () => {
+    await app.close();
+  });
+
+  const res = await app.inject({
+    method: 'GET',
+    url: '/v1/providers',
+    headers: { cookie: `jwt=${'valid'}` },
+  });
+  assert.equal(res.statusCode, 200, res.body);
+
+  const body = res.json() as { providers?: { id: string }[] };
+  assert.ok(Array.isArray(body.providers), 'the catalog must answer with a providers array');
+  assert.equal(body.providers?.length, 19, 'the keys screen must receive the whole catalog');
+});
+
+test('composite auth: the catalog exception never covers a non-GET request', async (t) => {
+  const app = makeApp();
+  t.after(async () => {
+    await app.close();
+  });
+
+  const res = await app.inject({
+    method: 'POST',
+    url: '/v1/providers',
+    headers: { cookie: `jwt=${'valid'}` },
+  });
+  assert.equal(res.statusCode, 401, res.body);
+});

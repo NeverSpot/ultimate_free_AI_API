@@ -2,7 +2,6 @@
 
 import { FormEvent, Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Check, Copy } from 'lucide-react';
 import {
   api,
   oauthStartUrl,
@@ -11,7 +10,7 @@ import {
   type RegisterResponse,
   type RegisterStartedResponse,
 } from '@/lib/api';
-import { useSession } from '@/hooks/use-session';
+import { useSession } from '@/components/session-provider';
 
 /** The API redirects back with a short code; the UI owns the human wording. */
 const OAUTH_ERRORS: Record<string, string> = {
@@ -75,10 +74,10 @@ function LoginPageInner() {
   const setTab = (next: 'signin' | 'register') =>
     router.replace(next === 'register' ? '/login?tab=register' : '/login');
 
-  // The session cookie is httpOnly and scoped to `/v1/user/*`, so the server
-  // render cannot tell whether the visitor is signed in. Probe the session and
-  // bounce authenticated visitors to the keys dashboard.
-  const { user: sessionUser, loading: sessionLoading } = useSession();
+  // The cookie is httpOnly, so this page probes the shared session to learn
+  // whether the visitor is already signed in and bounce them to /keys. The
+  // cookie itself is Path=/, so the Next server can read it for the /keys guard.
+  const { user: sessionUser, loading: sessionLoading, refresh: refreshSession } = useSession();
 
   // Sign-in state
   const [signInUsername, setSignInUsername] = useState('');
@@ -94,8 +93,6 @@ function LoginPageInner() {
   const [otpCode, setOtpCode] = useState('');
   const [devCode, setDevCode] = useState<string | null>(null);
   const [resendIn, setResendIn] = useState(0);
-  const [registeredKey, setRegisteredKey] = useState<string | null>(null);
-  const [copiedKey, setCopiedKey] = useState(false);
 
   // Which providers the API actually has credentials for.
   const [providers, setProviders] = useState<Array<'google' | 'github'>>([]);
@@ -139,22 +136,14 @@ function LoginPageInner() {
     setLoading(true);
 
     try {
-      const data = await api.post<LoginResponse>('/auth/login', {
+      await api.post<LoginResponse>('/auth/login', {
         username: signInUsername.trim(),
         password: signInPassword,
       });
 
-      const user = { userId: data.userId, username: data.username };
-      // The server re-issues the same gateway key on every login, so the client
-      // just stores what it was given. No key loss across sign-out or devices.
-      localStorage.removeItem('gateway_api_key');
-      localStorage.removeItem('gateway_key');
-      if (data.gateway_api_key) {
-        localStorage.setItem('gateway_api_key', data.gateway_api_key);
-        localStorage.setItem('gateway_key', data.gateway_api_key);
-      }
-      localStorage.setItem('user', JSON.stringify(user));
-
+      // The cookie is set by the response; re-probe /user/me so every consumer
+      // (header, landing CTAs, this page) sees the signed-in user before /keys.
+      await refreshSession();
       router.push('/keys');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed');
@@ -219,18 +208,17 @@ function LoginPageInner() {
     setLoading(true);
 
     try {
-      const data = await api.post<RegisterResponse>('/auth/register/verify', {
+      await api.post<RegisterResponse>('/auth/register/verify', {
         email: pendingEmail,
         code,
       });
 
-      localStorage.setItem('user', JSON.stringify(data.user));
-      localStorage.setItem('gateway_api_key', data.gateway_api_key);
-      localStorage.setItem('gateway_key', data.gateway_api_key);
-      setRegisteredKey(data.gateway_api_key);
+      // The verify response sets the session cookie. Refresh the shared session
+      // so /keys renders for this user immediately; the gateway key is fetched
+      // there on demand and never written to storage.
+      await refreshSession();
       setRegisterStep('details');
       setRegisterPassword('');
-
       router.push('/keys');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Verification failed');
@@ -254,17 +242,6 @@ function LoginPageInner() {
       setError(err instanceof Error ? err.message : 'Could not resend the code');
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function copyRegisteredKey() {
-    if (!registeredKey) return;
-    try {
-      await navigator.clipboard.writeText(registeredKey);
-      setCopiedKey(true);
-      setTimeout(() => setCopiedKey(false), 2000);
-    } catch {
-      setError('Could not copy to clipboard');
     }
   }
 
@@ -468,30 +445,6 @@ function LoginPageInner() {
             <p className="mt-1 text-sm text-slate-400">
               Register to get your personal gateway API key.
             </p>
-
-            {registeredKey && (
-              <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-950/40 p-4">
-                <p className="text-sm font-medium text-emerald-400">
-                  Account created successfully!
-                </p>
-                <p className="mt-1 text-xs text-slate-400">
-                  This is your gateway API key. You can view it any time on the Keys page.
-                </p>
-                <div className="mt-3 flex items-center gap-2">
-                  <code className="flex-1 break-all rounded border border-copper/25 bg-slate-950 p-2 text-xs text-slate-200">
-                    {registeredKey}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={copyRegisteredKey}
-                    className="inline-flex items-center gap-1 rounded border border-slate-700 bg-slate-800 px-2.5 py-2 text-xs text-slate-200 hover:bg-slate-700"
-                  >
-                    {copiedKey ? <Check size={14} /> : <Copy size={14} />}
-                    {copiedKey ? 'Copied' : 'Copy'}
-                  </button>
-                </div>
-              </div>
-            )}
 
             <form onSubmit={onRegisterSubmit} className="mt-6 flex flex-col gap-4">
               <div>

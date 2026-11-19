@@ -195,6 +195,12 @@ export function registerChatCompletions(
           parking: routerRuntime.parking,
           clock: now,
           signal: clientController.signal,
+          // Accounting: one row per terminal path, correlated to the same
+          // x-request-id the caller sees. Without the store the requests table
+          // stays empty and the dashboard usage strip cannot tell the truth.
+          ...(deps.accountingStore !== undefined ? { accountingStore: deps.accountingStore } : {}),
+          requestId: req.gatewayRequestId,
+          ...(req.user !== undefined ? { userId: req.user.id } : {}),
           onFirstChunk: (completed) => {
             meta = completed;
           },
@@ -380,6 +386,9 @@ export function registerChatCompletions(
         lru,
         parking: routerRuntime.parking,
         clock: now,
+        ...(deps.accountingStore !== undefined ? { accountingStore: deps.accountingStore } : {}),
+        requestId: req.gatewayRequestId,
+        ...(req.user !== undefined ? { userId: req.user.id } : {}),
         onComplete: (completed) => {
           meta = completed;
         },
