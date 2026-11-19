@@ -21,6 +21,9 @@ const nextConfig: NextConfig = {
     },
   },
   cacheComponents: true,
+  // Produces .next/standalone for the runtime image; without it the container
+  // needs the full node_modules tree and the image triples in size.
+  output: 'standalone',
   partialPrefetching: true,
   async rewrites() {
     if (process.env.NODE_ENV !== 'development') return [];
