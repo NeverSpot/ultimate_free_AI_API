@@ -1,0 +1,45 @@
+# Deployment overlay. Always run all three files:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#                  -f deploy/docker-compose.deploy.yml --profile app up -d --wait
+name: gateway
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+    image: ${FRONTEND_IMAGE:-ufa-frontend:dev}
+    expose:
+      - '3000'
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:3000/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  gateway:
+    image: ${GATEWAY_IMAGE:-}
+
+  nginx:
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/certs:/etc/letsencrypt:ro
+      - ./deploy/acme:/var/www/certbot
+    healthcheck:
+      # deploy/nginx.conf redirects port 80 to 443, so the inherited
+      # http://localhost/healthz probe follows the redirect and fails TLS
+      # verification (self-signed in dev, hostname-only in prod). Probe 443 directly.
+      test: ['CMD', 'wget', '-q', '--spider', '--no-check-certificate', 'https://localhost/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      frontend:
+        condition: service_healthy

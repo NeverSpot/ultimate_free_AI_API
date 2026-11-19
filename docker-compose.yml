@@ -94,7 +94,9 @@ services:
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
     ports:
-      - '${PORT:-8080}:8080'
+      # Loopback only: nginx is the sole public ingress. Compose cannot remove a
+      # published port in an overlay, so the base file must already bind to 127.0.0.1.
+      - '127.0.0.1:${PORT:-8080}:8080'
     healthcheck:
       test:
         [
